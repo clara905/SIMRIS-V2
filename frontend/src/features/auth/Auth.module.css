@@ -1,0 +1,103 @@
+.page {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--lembar);
+}
+.intro {
+  --kertas: var(--konsol);
+  --tinta: var(--konsol-teks);
+  --teks-kedua: var(--konsol-sekunder);
+  --biru-cap: #ff8591;
+  color: var(--tinta);
+  background-image:
+    linear-gradient(var(--konsol-garis) 1px, transparent 1px),
+    linear-gradient(90deg, var(--konsol-garis) 1px, transparent 1px);
+  background-size: 64px 64px;
+  padding: 64px clamp(32px, 6vw, 100px);
+  background: var(--kertas);
+  border-right: 1px solid var(--garis);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--biru-cap);
+  font-size: 22px;
+  font-weight: 600;
+  margin-bottom: 72px;
+}
+.intro h1 {
+  font-size: 48px;
+  line-height: 1.12;
+  max-width: 440px;
+  margin-bottom: 24px;
+}
+.intro p {
+  color: var(--teks-kedua);
+  max-width: 44ch;
+  font-size: 16px;
+}
+.register {
+  margin-top: 48px;
+  border-top: 2px solid var(--biru-cap);
+  padding-top: 16px;
+  display: flex;
+  gap: 24px;
+  font-size: 13px;
+  color: var(--teks-kedua);
+}
+.formSide {
+  display: grid;
+  place-items: center;
+  padding: 48px 32px;
+}
+.form {
+  width: 100%;
+  max-width: 380px;
+}
+.form h1 {
+  font-size: 36px;
+  margin: 0 0 12px;
+}
+.form > p {
+  color: var(--teks-kedua);
+  margin-bottom: 32px;
+}
+.form button[type='submit'] {
+  width: 100%;
+  margin-top: 12px;
+}
+.demo {
+  border-top: 1px solid var(--garis);
+  padding-top: 20px;
+  margin-top: 32px;
+  font-size: 12px;
+  color: var(--teks-kedua);
+}
+@media (max-width: 767px) {
+  .page {
+    display: block;
+  }
+  .intro {
+    padding: 28px 24px;
+    border-right: 0;
+    border-bottom: 1px solid var(--garis);
+  }
+  .brand {
+    margin-bottom: 24px;
+  }
+  .intro h1 {
+    font-size: 28px;
+  }
+  .intro p,
+  .register {
+    display: none;
+  }
+  .formSide {
+    padding: 32px 24px;
+  }
+}

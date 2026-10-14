@@ -1,0 +1,224 @@
+.date {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--teks-kedua);
+  padding-top: 7px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.section {
+  border-radius: 14px 4px 14px 4px;
+  overflow: hidden;
+  background: var(--lembar);
+  border: 1px solid var(--garis);
+  margin-bottom: 24px;
+}
+.heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px;
+  border-bottom: 1px solid var(--garis);
+}
+.heading h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.heading p {
+  margin: 6px 0 0;
+  color: var(--teks-kedua);
+  font-size: 13px;
+}
+.heading a {
+  font-size: 13px;
+  white-space: nowrap;
+}
+.count {
+  font-size: 12px;
+  border: 1px solid var(--garis);
+  padding: 5px 10px;
+  border-radius: var(--radius-sel);
+  color: var(--teks-kedua);
+  white-space: nowrap;
+}
+.followup {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  gap: 16px;
+  align-items: center;
+  margin: 0 24px;
+  padding: 17px 0;
+  border-bottom: 1px solid var(--garis);
+  text-decoration: none;
+  color: var(--tinta);
+}
+.followup:last-child {
+  border-bottom: 0;
+}
+.followup:hover .action {
+  text-decoration: underline;
+}
+.followup {
+  transition: background-color var(--durasi-interaksi) ease;
+}
+.followup:hover,
+.followup:focus-visible {
+  background: var(--aksen-lembut);
+}
+.action svg {
+  transition: transform var(--durasi-interaksi) ease;
+}
+.followup:hover .action svg {
+  transform: translateX(3px);
+}
+.priority {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 16px 24px 4px;
+}
+.priority button {
+  font-size: 13px;
+}
+.priority button[aria-pressed='true'] {
+  color: var(--lembar);
+  background: var(--aksen);
+  border-color: var(--aksen);
+}
+.bar a:hover,
+.bar a:focus-visible {
+  text-decoration: underline;
+  outline: 2px solid var(--aksen);
+  outline-offset: 2px;
+}
+.number {
+  border-radius: 8px 2px 8px 2px;
+  min-height: 40px;
+  display: grid;
+  place-items: center;
+  background: var(--biru-cap-tint);
+  color: var(--biru-cap);
+  border: 1px solid var(--garis);
+  font-size: 18px;
+  font-weight: 500;
+}
+.followup strong {
+  font-size: 14px;
+  font-weight: 500;
+}
+.followup small {
+  display: block;
+  color: var(--teks-kedua);
+  font-size: 12px;
+  margin-top: 3px;
+}
+.action {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--biru-cap);
+}
+.summary {
+  padding: 24px;
+}
+.bar {
+  display: flex;
+  min-height: 48px;
+  width: 100%;
+  gap: 3px;
+}
+.bar a {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  text-decoration: none;
+  padding: 10px 8px;
+  font-size: 12px;
+  min-width: 0;
+}
+.bar a:nth-child(1) {
+  background: var(--biru-cap);
+  color: var(--lembar);
+}
+.bar a:nth-child(2) {
+  background: var(--biru-cap-tint);
+  color: var(--biru-cap);
+}
+.bar a:nth-child(3) {
+  background: var(--garis);
+  color: var(--tinta);
+}
+.bar a:nth-child(4) {
+  background: var(--kertas);
+  color: var(--teks-kedua);
+  border: 1px solid var(--garis);
+}
+.summary small {
+  display: block;
+  margin-top: 14px;
+  color: var(--teks-kedua);
+}
+.activity {
+  display: grid;
+  grid-template-columns: 140px 1fr auto;
+  gap: 24px;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--garis);
+  font-size: 13px;
+}
+.activity:last-child {
+  border-bottom: 0;
+}
+.activity time {
+  color: var(--teks-kedua);
+  font-size: 12px;
+}
+.activity strong {
+  font-weight: 500;
+}
+.activity p {
+  margin: 4px 0 0;
+  color: var(--teks-kedua);
+}
+.activity a {
+  align-self: center;
+}
+.activity a {
+  font-size: 12px;
+}
+@media (max-width: 767px) {
+  .heading {
+    background: linear-gradient(110deg, var(--lembar) 70%, var(--aksen-lembut));
+    padding: 18px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .followup {
+    margin: 0 18px;
+    grid-template-columns: 36px 1fr;
+    gap: 12px;
+  }
+  .action {
+    grid-column: 2;
+  }
+  .summary {
+    padding: 18px;
+    overflow-x: auto;
+  }
+  .bar {
+    min-width: 520px;
+  }
+  .activity {
+    padding: 18px;
+    grid-template-columns: 1fr auto;
+    gap: 8px 12px;
+  }
+  .activity time {
+    grid-column: 1 / -1;
+  }
+}

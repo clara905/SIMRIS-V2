@@ -1,0 +1,46 @@
+.header {
+  position: relative;
+  padding: 24px;
+  background: var(--lembar);
+  border: 1px solid var(--garis);
+  border-radius: 14px 4px 14px 4px;
+  border-left: 4px solid var(--aksen);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 8px 0 30px;
+}
+.header::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 30px;
+  height: 10px;
+  border-bottom: 2px solid var(--aksen);
+  border-right: 2px solid var(--aksen);
+  border-radius: 0 0 4px 0;
+  pointer-events: none;
+}
+.header p {
+  color: var(--teks-kedua);
+  margin: 8px 0 0;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+@media (max-width: 767px) {
+  .header {
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 0;
+  }
+  .header h1 {
+    font-size: 32px;
+  }
+}

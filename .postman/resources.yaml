@@ -1,0 +1,9 @@
+# Use this workspace to collaborate
+workspace:
+  id: fc5c9a4d-9c40-4ebf-9e1f-25a7a35740ff
+
+localResources:
+  specs:
+    - ../backend/storage/app/openapi-stage3.json
+    - ../backend/storage/app/openapi-stage4.json
+    - ../frontend/src/api/mock.openapi.json

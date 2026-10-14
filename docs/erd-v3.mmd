@@ -1,0 +1,1472 @@
+erDiagram
+
+    %% =====================================================
+
+    %% SIMRIS v3 - revisi laporan Lampiran 14 dan integritas historis
+
+    %% =====================================================
+
+
+
+    %% ---------- ORGANISASI, PEGAWAI, AKSES ----------
+
+    UNIT_ORGANISASI {
+
+        bigint id PK
+
+        bigint parent_id FK "NULL untuk satker"
+
+        varchar kode UK
+
+        varchar nama
+
+        varchar jenis "SATKER BIDANG BAGIAN SUBBIDANG SUBBAGIAN"
+
+        boolean aktif
+
+    }
+
+
+
+    PEGAWAI {
+
+        bigint id PK
+
+        varchar nip UK "Nullable untuk non-PNS"
+
+        varchar nama
+
+        varchar email_kontak
+
+        varchar jenis_kepegawaian
+
+        boolean aktif
+
+    }
+
+
+
+    PENEMPATAN_PEGAWAI {
+
+        bigint id PK
+
+        bigint pegawai_id FK
+
+        bigint unit_id FK
+
+        date mulai
+
+        date selesai "Nullable"
+
+    }
+
+
+
+    USERS {
+
+        bigint id PK
+
+        bigint pegawai_id FK,UK "Nullable untuk akun sistem"
+
+        varchar username UK
+
+        varchar email_login UK
+
+        varchar password_hash
+
+        boolean aktif
+
+    }
+
+
+
+    ROLES {
+
+        bigint id PK
+
+        varchar kode UK "SUPER_ADMIN ADMIN_SATKER KASATKER KABID KASUB STAFF"
+
+        varchar nama
+
+    }
+
+
+
+    USER_ROLE_SCOPE {
+
+        bigint id PK
+
+        bigint user_id FK
+
+        bigint role_id FK
+
+        bigint unit_id FK "NULL hanya untuk SUPER_ADMIN"
+
+        datetime mulai
+
+        datetime selesai "Nullable"
+
+    }
+
+
+
+    LOG_AUDIT {
+
+        bigint id PK
+
+        bigint user_id FK "Nullable untuk proses sistem"
+
+        varchar entitas
+
+        bigint entitas_id
+
+        varchar aksi "CREATE UPDATE DELETE LOGIN APPROVE"
+
+        json data_lama "Nullable"
+
+        json data_baru "Nullable"
+
+        varchar ip_address
+
+        datetime waktu
+
+    }
+
+
+
+    %% ---------- ASET ----------
+
+    SUMBER_ASET {
+
+        bigint id PK
+
+        varchar kode UK
+
+        varchar nama
+
+    }
+
+
+
+    KATEGORI_ASET {
+
+        bigint id PK
+
+        bigint parent_id FK "Nullable untuk kategori teratas"
+
+        varchar kode UK
+
+        varchar nama
+
+    }
+
+
+
+    KLASIFIKASI_INFORMASI {
+
+        bigint id PK
+
+        varchar kode UK
+
+        varchar nama
+
+        text deskripsi
+
+    }
+
+
+
+    ASET {
+
+        bigint id PK
+
+        bigint sumber_id FK "UK gabungan dengan external_id"
+
+        varchar external_id
+
+        bigint unit_pemilik_id FK
+
+        bigint kategori_id FK
+
+        bigint klasifikasi_informasi_id FK "Nullable"
+
+        varchar kode_aset UK
+
+        varchar nama
+
+        text deskripsi
+
+        varchar merk
+
+        varchar nomor_seri "Nullable untuk kelompok aset"
+
+        int jumlah
+
+        varchar kondisi
+
+        varchar lokasi
+
+        date tanggal_pengadaan
+
+        varchar status
+
+        datetime last_synced_at
+
+    }
+
+
+
+    PENUGASAN_ASET {
+
+        bigint id PK
+
+        bigint aset_id FK
+
+        bigint pegawai_id FK
+
+        varchar jenis_tanggung_jawab
+
+        date mulai
+
+        date selesai "Nullable"
+
+    }
+
+
+
+    %% ---------- METODE RISIKO (BERVERSI) ----------
+
+    PERIODE_PENILAIAN {
+
+        bigint id PK
+
+        varchar nama
+
+        date tanggal_mulai
+
+        date tanggal_selesai
+
+    }
+
+
+
+    VERSI_METODE_RISIKO {
+
+        bigint id PK
+
+        varchar nama
+
+        varchar versi
+
+        text referensi
+
+        boolean dibekukan
+
+    }
+
+
+
+    SKALA_KEMUNGKINAN {
+
+        bigint id PK
+
+        bigint versi_metode_id FK
+
+        int nilai "UK gabungan dengan versi_metode_id"
+
+        varchar label
+
+        varchar label_persentase
+
+        varchar label_frekuensi
+
+        text kriteria
+
+    }
+
+
+
+    SKALA_DAMPAK {
+
+        bigint id PK
+
+        bigint versi_metode_id FK
+
+        int nilai "UK gabungan dengan versi_metode_id"
+
+        varchar label
+
+        text kriteria
+
+    }
+
+
+
+    AREA_DAMPAK {
+
+        bigint id PK
+
+        varchar kode UK
+
+        varchar nama
+
+    }
+
+
+
+    %% UNIQUE (skala_dampak_id, area_dampak_id, arah_dampak)
+    KRITERIA_DAMPAK {
+
+        bigint id PK
+
+        bigint skala_dampak_id FK "UK gabungan dengan area_dampak_id dan arah_dampak"
+
+        bigint area_dampak_id FK
+
+        varchar arah_dampak "P atau N"
+
+        text deskripsi
+
+    }
+
+
+
+    TINGKAT_RISIKO {
+
+        bigint id PK
+
+        bigint versi_metode_id FK
+
+        varchar kode
+
+        varchar nama
+
+        varchar warna
+
+    }
+
+
+
+    MATRIKS_RISIKO {
+
+        bigint id PK
+
+        bigint versi_metode_id FK
+
+        bigint kemungkinan_id FK
+
+        bigint dampak_id FK
+
+        bigint tingkat_risiko_id FK
+
+        int skor
+
+        varchar rekomendasi_keputusan
+
+    }
+
+
+
+    %% ---------- ASESMEN RISIKO ----------
+
+    ASESMEN_RISIKO {
+
+        bigint id PK
+
+        bigint seri_asesmen_id FK
+
+        bigint versi_sebelumnya_id FK "Nullable untuk versi pertama"
+
+        bigint periode_id FK
+
+        bigint unit_id FK
+
+        bigint versi_metode_id FK
+
+        bigint dibuat_oleh FK
+
+        text tujuan
+
+        text ruang_lingkup
+
+        varchar status "DRAFT DIAJUKAN DIREVIU DISAHKAN"
+
+        int nomor_versi
+
+        datetime dibuat_pada
+
+        datetime dibekukan_pada "Nullable sebelum disahkan"
+
+    }
+
+
+
+    JENIS_ANCAMAN {
+
+        bigint id PK
+
+        varchar kode UK
+
+        varchar nama
+
+    }
+
+
+
+    SUMBER_ANCAMAN {
+
+        bigint id PK
+
+        varchar kode UK
+
+        varchar nama
+
+        text deskripsi
+
+    }
+
+
+
+    ANCAMAN {
+
+        bigint id PK
+
+        bigint jenis_ancaman_id FK
+
+        varchar kode UK
+
+        varchar nama
+
+        text deskripsi
+
+    }
+
+
+
+    ANCAMAN_SUMBER {
+
+        bigint ancaman_id PK,FK
+
+        bigint sumber_ancaman_id PK,FK
+
+    }
+
+
+
+    JENIS_KERENTANAN {
+
+        bigint id PK
+
+        varchar kode UK
+
+        varchar nama
+
+    }
+
+
+
+    KERENTANAN {
+
+        bigint id PK
+
+        bigint jenis_kerentanan_id FK
+
+        varchar kode UK
+
+        varchar nama
+
+        text deskripsi
+
+    }
+
+
+
+    RISIKO {
+
+        bigint id PK
+
+        bigint asesmen_id FK
+
+        bigint ancaman_id FK
+
+        bigint kerentanan_id FK
+
+        bigint area_dampak_id FK
+
+        bigint pemilik_risiko_id FK
+
+        bigint dibuat_oleh FK
+
+        varchar kode "UK gabungan dengan asesmen_id"
+
+        text skenario
+
+        text uraian_kerentanan "Konteks spesifik"
+
+        text uraian_dampak
+
+        varchar arah_dampak "P atau N"
+
+        datetime dibuat_pada
+
+    }
+
+
+
+
+
+
+
+    ASESMEN_ASET {
+
+        bigint id PK
+
+        bigint asesmen_id FK "UK gabungan dengan aset_id"
+
+        bigint aset_id FK
+
+        varchar nama_snapshot
+
+        varchar kategori_snapshot
+
+        varchar klasifikasi_informasi_snapshot
+
+        text jalur_unit_snapshot
+
+        varchar lokasi_snapshot
+
+        decimal nilai_kekritisan
+
+        text dasar_kekritisan
+
+        datetime direkam_pada
+
+    }
+
+
+
+    RISIKO_ASET {
+
+        bigint risiko_id PK,FK
+
+        bigint asesmen_aset_id PK,FK "Harus satu asesmen dengan risiko"
+
+    }
+
+
+
+    PENILAIAN_RISIKO {
+
+        bigint id PK
+
+        bigint risiko_id FK
+
+        bigint matriks_id FK
+
+        bigint dinilai_oleh FK
+
+        varchar tahap "SAAT_INI TARGET_SETELAH AKTUAL_SETELAH"
+
+        text alasan_kemungkinan
+
+        text alasan_dampak
+
+        text kesimpulan
+
+        datetime dinilai_pada
+
+    }
+
+
+
+    USULAN_KEPUTUSAN {
+
+        bigint id PK
+
+        bigint penilaian_id FK
+
+        bigint diusulkan_oleh FK
+
+        varchar keputusan
+
+        text alasan
+
+        datetime diusulkan_pada
+
+    }
+
+
+
+    KEPUTUSAN_RISIKO {
+
+        bigint id PK
+
+        bigint penilaian_id FK,UK
+
+        bigint diputuskan_oleh FK
+
+        varchar keputusan
+
+        text alasan
+
+        datetime diputuskan_pada
+
+    }
+
+
+
+    REVIEW_ASESMEN {
+
+        bigint id PK
+
+        bigint asesmen_id FK
+
+        bigint reviewer_id FK
+
+        varchar tahap
+
+        varchar keputusan
+
+        text catatan
+
+        datetime waktu
+
+    }
+
+
+
+    %% ---------- PENANGANAN RISIKO ----------
+
+    RENCANA_KERJA {
+
+        bigint id PK
+
+        varchar kode UK
+
+        text uraian_template
+
+    }
+
+
+
+    RENCANA_PENANGANAN {
+
+        bigint id PK
+
+        bigint asesmen_id FK
+
+        bigint rencana_kerja_id FK "Nullable"
+
+        bigint pic_id FK
+
+        varchar kode
+
+        text uraian
+
+        date target_selesai
+
+        varchar status
+
+    }
+
+
+
+    RISIKO_PENANGANAN {
+
+        bigint risiko_id PK,FK
+
+        bigint rencana_penanganan_id PK,FK
+
+    }
+
+
+
+    PROGRES_PENANGANAN {
+
+        bigint id PK
+
+        bigint rencana_penanganan_id FK
+
+        bigint dilaporkan_oleh FK
+
+        text uraian
+
+        varchar status
+
+        datetime dilaporkan_pada
+
+    }
+
+
+
+    %% ---------- STANDAR, KONTROL, REGULASI ----------
+
+    STANDAR_KONTROL {
+
+        bigint id PK
+
+        varchar nama
+
+        varchar versi
+
+        text referensi
+
+    }
+
+
+
+    KONTROL {
+
+        bigint id PK
+
+        bigint standar_id FK
+
+        bigint parent_id FK "Nullable untuk bagian teratas"
+
+        varchar kode
+
+        varchar nama
+
+        varchar jenis "BAGIAN OBJEKTIF KONTROL"
+
+        text deskripsi
+
+    }
+
+
+
+    REGULASI {
+
+        bigint id PK
+
+        varchar kode UK
+
+        varchar nama
+
+        text referensi
+
+    }
+
+
+
+    RISIKO_KONTROL {
+
+        bigint risiko_id PK,FK
+
+        bigint kontrol_id PK,FK
+
+        text alasan_relevansi
+
+    }
+
+
+
+    KONTROL_INTERNAL {
+
+        bigint id PK
+
+        bigint unit_pemilik_id FK
+
+        varchar kode
+
+        varchar nama
+
+        varchar jenis "SOP KEBIJAKAN TEKNIS FISIK LAINNYA"
+
+        text deskripsi
+
+        boolean aktif
+
+    }
+
+
+
+    RISIKO_KONTROL_INTERNAL {
+
+        bigint risiko_id PK,FK
+
+        bigint kontrol_internal_id PK,FK
+
+        varchar status_penerapan
+
+        text kondisi_penerapan
+
+        datetime diperiksa_pada
+
+    }
+
+
+
+    KONTROL_INTERNAL_STANDAR {
+
+        bigint kontrol_internal_id PK,FK
+
+        bigint kontrol_id PK,FK
+
+        text keterangan
+
+    }
+
+
+
+    %% ---------- DOKUMEN DAN SOP ----------
+
+    DOKUMEN {
+        bigint id PK
+        bigint unit_pemilik_id FK
+        bigint dibuat_oleh FK
+        varchar kode UK
+        varchar judul
+        varchar jenis "SOP BUKTI LAPORAN PENDUKUNG"
+        datetime dibuat_pada
+    }
+
+
+
+    SOP {
+
+        bigint id PK
+
+        bigint unit_pemilik_id FK
+
+        varchar kode "UK gabungan dengan unit_pemilik_id"
+
+        varchar judul
+
+    }
+
+
+
+    SOP_VERSI {
+
+        bigint id PK
+
+        bigint sop_id FK
+
+        bigint dokumen_versi_id FK
+
+        bigint dibuat_oleh FK
+
+        varchar nomor_versi
+
+        date tanggal_berlaku
+
+        varchar status
+
+        datetime dibuat_pada
+
+    }
+
+
+
+    SOP_REVIEW {
+
+        bigint id PK
+
+        bigint sop_versi_id FK
+
+        bigint reviewer_id FK
+
+        varchar tahap
+
+        varchar keputusan
+
+        text catatan
+
+        datetime waktu
+
+    }
+
+
+
+    KONTROL_INTERNAL_SOP {
+
+        bigint kontrol_internal_id PK,FK
+
+        bigint sop_versi_id PK,FK
+
+    }
+
+
+
+    SOP_KONTROL {
+
+        bigint sop_versi_id PK,FK
+
+        bigint kontrol_id PK,FK
+
+    }
+
+
+
+    PENANGANAN_SOP {
+
+        bigint rencana_penanganan_id PK,FK
+
+        bigint sop_versi_id PK,FK
+
+    }
+
+
+
+    %% ---------- SOA ----------
+
+    SOA {
+
+        bigint id PK
+
+        bigint unit_id FK
+
+        bigint periode_id FK
+
+        bigint standar_id FK
+
+        text ruang_lingkup
+
+    }
+
+
+
+    SOA_VERSI {
+
+        bigint id PK
+
+        bigint soa_id FK
+
+        bigint dibuat_oleh FK
+
+        varchar nomor_versi
+
+        varchar status
+
+        datetime dibuat_pada
+
+        datetime dibekukan_pada "Nullable"
+
+    }
+
+
+
+    SOA_DETAIL {
+
+        bigint id PK
+
+        bigint soa_versi_id FK
+
+        bigint kontrol_id FK
+
+        bigint penanggung_jawab_id FK "Nullable jika tidak berlaku"
+
+        boolean berlaku
+
+        text alasan
+
+        varchar status_penerapan
+
+    }
+
+
+
+    SOA_BENCHMARK {
+
+        bigint id PK
+
+        bigint soa_detail_id FK
+
+        bigint regulasi_id FK
+
+        varchar rujukan
+
+    }
+
+
+
+    SOA_DETAIL_SOP {
+
+        bigint soa_detail_id PK,FK
+
+        bigint sop_versi_id PK,FK
+
+    }
+
+
+
+    SOA_REVIEW {
+
+        bigint id PK
+
+        bigint soa_versi_id FK
+
+        bigint reviewer_id FK
+
+        varchar tahap
+
+        varchar keputusan
+
+        text catatan
+
+        datetime waktu
+
+    }
+
+
+
+    %% ---------- BUKTI ----------
+
+    BUKTI_PENILAIAN {
+
+        bigint penilaian_id PK,FK
+
+        bigint dokumen_versi_id PK,FK
+
+        text keterangan
+
+    }
+
+
+
+    BUKTI_SOA {
+
+        bigint soa_detail_id PK,FK
+
+        bigint dokumen_versi_id PK,FK
+
+        text keterangan
+
+    }
+
+
+
+    BUKTI_PENANGANAN {
+
+        bigint progres_penanganan_id PK,FK
+
+        bigint dokumen_versi_id PK,FK
+
+        text keterangan
+
+    }
+
+
+
+    %% =====================================================
+
+    SERI_ASESMEN {
+
+        bigint id PK
+
+        varchar kode UK
+
+        varchar nama
+
+    }
+
+
+
+    RISIKO_KONTROL_SOP {
+
+        bigint risiko_id PK,FK
+
+        bigint kontrol_internal_id PK,FK
+
+        bigint sop_versi_id PK,FK
+
+    }
+
+
+
+    SOA_DETAIL_RISIKO {
+
+        bigint soa_detail_id PK,FK
+
+        bigint risiko_id PK,FK
+
+    }
+
+
+
+    %% ATURAN INTEGRITAS DOKUMENTASI (diterapkan melalui migration, constraint, dan service):
+    %% 1. UNIQUE (dokumen_id, nomor_versi) pada DOKUMEN_VERSI.
+    %% 2. DRAFT boleh memiliki isi_teks kosong dan tanpa lampiran.
+    %% 3. FINAL wajib memiliki isi_teks tidak kosong ATAU minimal satu FILE_LAMPIRAN
+    %%    dengan status_pemeriksaan = AMAN yang terhubung melalui DOKUMEN_VERSI_FILE.
+    %% 4. SOP/bukti yang digunakan dalam proses pengesahan harus menunjuk DOKUMEN_VERSI
+    %%    dengan status = FINAL.
+    %% 5. Setelah dibekukan, isi_teks, daftar lampiran, dan isi file tidak boleh ditimpa;
+    %%    perubahan harus membuat versi baru.
+    %% 6. FILE_LAMPIRAN tidak boleh dihapus selama masih dirujuk oleh DOKUMEN_VERSI_FILE.
+    %%
+    %% ---------- VERSI DOKUMEN DAN FILE LAMPIRAN ----------
+
+    %% UNIQUE (dokumen_id, nomor_versi)
+    DOKUMEN_VERSI {
+        bigint id PK
+        bigint dokumen_id FK
+        bigint dibuat_oleh FK
+        int nomor_versi
+        text isi_teks "Nullable jika hanya unggahan"
+        varchar format_teks "PLAIN MARKDOWN RICH_TEXT_JSON"
+        varchar status "DRAFT FINAL"
+        datetime dibuat_pada
+        datetime dibekukan_pada "Nullable"
+    }
+
+    FILE_LAMPIRAN {
+        bigint id PK
+        bigint diunggah_oleh FK
+        varchar nama_asli
+        varchar storage_key UK
+        varchar ekstensi
+        varchar mime_type_terdeteksi
+        bigint ukuran_byte
+        varchar checksum_sha256
+        varchar status_pemeriksaan "PENDING AMAN DITOLAK"
+        datetime diunggah_pada
+    }
+
+    DOKUMEN_VERSI_FILE {
+        bigint dokumen_versi_id PK,FK
+        bigint file_id PK,FK
+        varchar keterangan
+        int urutan
+    }
+
+    %% RELASI
+
+    %% =====================================================
+
+
+
+    %% Organisasi dan akses
+
+    UNIT_ORGANISASI o|--o{ UNIT_ORGANISASI : membawahi
+
+    UNIT_ORGANISASI ||--o{ PENEMPATAN_PEGAWAI : menerima
+
+    PEGAWAI ||--o{ PENEMPATAN_PEGAWAI : ditempatkan
+
+    PEGAWAI o|--o| USERS : memiliki_akun
+
+    USERS ||--o{ USER_ROLE_SCOPE : mendapat
+
+    ROLES ||--o{ USER_ROLE_SCOPE : menentukan
+
+    UNIT_ORGANISASI o|--o{ USER_ROLE_SCOPE : membatasi
+
+    USERS o|--o{ LOG_AUDIT : melakukan
+
+
+
+    %% Aset
+
+    SUMBER_ASET ||--o{ ASET : menyediakan
+
+    KATEGORI_ASET ||--o{ ASET : mengelompokkan
+
+    KATEGORI_ASET o|--o{ KATEGORI_ASET : memiliki_subkategori
+
+    KLASIFIKASI_INFORMASI o|--o{ ASET : mengklasifikasikan
+
+    UNIT_ORGANISASI ||--o{ ASET : memiliki
+
+    ASET ||--o{ PENUGASAN_ASET : ditugaskan
+
+    PEGAWAI ||--o{ PENUGASAN_ASET : bertanggung_jawab
+
+
+
+    %% Metode risiko
+
+    VERSI_METODE_RISIKO ||--o{ SKALA_KEMUNGKINAN : menetapkan
+
+    VERSI_METODE_RISIKO ||--o{ SKALA_DAMPAK : menetapkan
+
+    VERSI_METODE_RISIKO ||--o{ TINGKAT_RISIKO : menetapkan
+
+    VERSI_METODE_RISIKO ||--o{ MATRIKS_RISIKO : memuat
+
+    SKALA_KEMUNGKINAN ||--o{ MATRIKS_RISIKO : menentukan_baris
+
+    SKALA_DAMPAK ||--o{ MATRIKS_RISIKO : menentukan_kolom
+
+    TINGKAT_RISIKO ||--o{ MATRIKS_RISIKO : menghasilkan
+
+    SKALA_DAMPAK ||--o{ KRITERIA_DAMPAK : dijabarkan
+
+    AREA_DAMPAK ||--o{ KRITERIA_DAMPAK : dijabarkan_per_area
+
+
+
+    %% Asesmen
+
+    PERIODE_PENILAIAN ||--o{ ASESMEN_RISIKO : mencakup
+
+    UNIT_ORGANISASI ||--o{ ASESMEN_RISIKO : menjadi_lingkup
+
+    USERS ||--o{ ASESMEN_RISIKO : membuat
+
+    VERSI_METODE_RISIKO ||--o{ ASESMEN_RISIKO : digunakan
+
+    ASESMEN_RISIKO ||--o{ RISIKO : memuat
+
+    AREA_DAMPAK ||--o{ RISIKO : berdampak_pada
+
+    PEGAWAI ||--o{ RISIKO : menjadi_pemilik
+
+    USERS ||--o{ RISIKO : menyusun
+
+
+
+    %% Ancaman dan kerentanan
+
+    JENIS_ANCAMAN ||--o{ ANCAMAN : mengelompokkan
+
+    ANCAMAN ||--o{ ANCAMAN_SUMBER : bersumber
+
+    SUMBER_ANCAMAN ||--o{ ANCAMAN_SUMBER : menjadi_sumber
+
+    JENIS_KERENTANAN ||--o{ KERENTANAN : mengelompokkan
+
+
+
+    %% Aset dalam asesmen
+
+    ASESMEN_RISIKO ||--o{ ASESMEN_ASET : merekam
+
+    ASET ||--o{ ASESMEN_ASET : memiliki_snapshot
+
+    RISIKO ||--o{ RISIKO_ASET : melibatkan
+
+    ASESMEN_ASET ||--o{ RISIKO_ASET : terdampak
+
+
+
+    %% Penilaian dan keputusan
+
+    RISIKO ||--o{ PENILAIAN_RISIKO : dinilai
+
+    MATRIKS_RISIKO ||--o{ PENILAIAN_RISIKO : menentukan_hasil
+
+    USERS ||--o{ PENILAIAN_RISIKO : menilai
+
+    PENILAIAN_RISIKO ||--o{ USULAN_KEPUTUSAN : diusulkan
+
+    USERS ||--o{ USULAN_KEPUTUSAN : mengusulkan
+
+    PENILAIAN_RISIKO ||--o| KEPUTUSAN_RISIKO : menjadi_dasar
+
+    USERS ||--o{ KEPUTUSAN_RISIKO : memutuskan
+
+    ASESMEN_RISIKO ||--o{ REVIEW_ASESMEN : direviu
+
+    USERS ||--o{ REVIEW_ASESMEN : mereviu
+
+
+
+    %% Penanganan
+
+    ASESMEN_RISIKO ||--o{ RENCANA_PENANGANAN : merencanakan
+
+    RENCANA_KERJA o|--o{ RENCANA_PENANGANAN : menjadi_acuan
+
+    PEGAWAI ||--o{ RENCANA_PENANGANAN : menjadi_pic
+
+    RISIKO ||--o{ RISIKO_PENANGANAN : membutuhkan
+
+    RENCANA_PENANGANAN ||--o{ RISIKO_PENANGANAN : menangani
+
+    RENCANA_PENANGANAN ||--o{ PROGRES_PENANGANAN : memiliki
+
+    USERS ||--o{ PROGRES_PENANGANAN : melaporkan
+
+
+
+    %% Standar dan kontrol
+
+    STANDAR_KONTROL ||--o{ KONTROL : memuat
+
+    KONTROL o|--o{ KONTROL : memiliki_subbagian
+
+    RISIKO ||--o{ RISIKO_KONTROL : membutuhkan
+
+    KONTROL ||--o{ RISIKO_KONTROL : relevan
+
+    UNIT_ORGANISASI ||--o{ KONTROL_INTERNAL : memiliki
+
+    RISIKO ||--o{ RISIKO_KONTROL_INTERNAL : memiliki_pengamanan
+
+    KONTROL_INTERNAL ||--o{ RISIKO_KONTROL_INTERNAL : diterapkan
+
+    KONTROL_INTERNAL ||--o{ KONTROL_INTERNAL_STANDAR : dipetakan
+
+    KONTROL ||--o{ KONTROL_INTERNAL_STANDAR : menjadi_acuan
+
+
+
+    %% Dokumen dan SOP
+
+    UNIT_ORGANISASI ||--o{ DOKUMEN : memiliki
+
+    USERS ||--o{ DOKUMEN : membuat
+
+    UNIT_ORGANISASI ||--o{ SOP : memiliki
+
+    SOP ||--o{ SOP_VERSI : memiliki_versi
+
+    DOKUMEN_VERSI ||--o{ SOP_VERSI : menjadi_isi
+
+    USERS ||--o{ SOP_VERSI : menyusun
+
+    SOP_VERSI ||--o{ SOP_REVIEW : direviu
+
+    USERS ||--o{ SOP_REVIEW : mereviu
+
+    KONTROL_INTERNAL ||--o{ KONTROL_INTERNAL_SOP : didukung
+
+    SOP_VERSI ||--o{ KONTROL_INTERNAL_SOP : mendukung
+
+    SOP_VERSI ||--o{ SOP_KONTROL : mendukung
+
+    KONTROL ||--o{ SOP_KONTROL : didukung
+
+    RENCANA_PENANGANAN ||--o{ PENANGANAN_SOP : terkait
+
+    SOP_VERSI ||--o{ PENANGANAN_SOP : menjadi_acuan
+
+
+
+    %% SOA
+
+    UNIT_ORGANISASI ||--o{ SOA : memiliki
+
+    PERIODE_PENILAIAN ||--o{ SOA : mencakup
+
+    STANDAR_KONTROL ||--o{ SOA : menjadi_acuan
+
+    SOA ||--o{ SOA_VERSI : memiliki_versi
+
+    USERS ||--o{ SOA_VERSI : menyusun
+
+    SOA_VERSI ||--o{ SOA_DETAIL : memuat
+
+    KONTROL ||--o{ SOA_DETAIL : dievaluasi
+
+    PEGAWAI o|--o{ SOA_DETAIL : bertanggung_jawab
+
+    SOA_DETAIL ||--o{ SOA_BENCHMARK : dibandingkan
+
+    REGULASI ||--o{ SOA_BENCHMARK : menjadi_rujukan
+
+    SOA_DETAIL ||--o{ SOA_DETAIL_SOP : didukung
+
+    SOP_VERSI ||--o{ SOA_DETAIL_SOP : mendukung
+
+    SOA_VERSI ||--o{ SOA_REVIEW : direviu
+
+    USERS ||--o{ SOA_REVIEW : mereviu
+
+
+
+    %% Versi dokumen dan file lampiran
+    DOKUMEN ||--o{ DOKUMEN_VERSI : memiliki_versi
+    USERS ||--o{ DOKUMEN_VERSI : menyusun
+    USERS ||--o{ FILE_LAMPIRAN : mengunggah
+    DOKUMEN_VERSI ||--o{ DOKUMEN_VERSI_FILE : melampirkan
+    FILE_LAMPIRAN ||--o{ DOKUMEN_VERSI_FILE : digunakan
+
+    %% Bukti
+
+    PENILAIAN_RISIKO ||--o{ BUKTI_PENILAIAN : dibuktikan
+
+    DOKUMEN_VERSI ||--o{ BUKTI_PENILAIAN : menjadi_bukti
+
+    SOA_DETAIL ||--o{ BUKTI_SOA : dibuktikan
+
+    DOKUMEN_VERSI ||--o{ BUKTI_SOA : menjadi_bukti
+
+    PROGRES_PENANGANAN ||--o{ BUKTI_PENANGANAN : dibuktikan
+
+    DOKUMEN_VERSI ||--o{ BUKTI_PENANGANAN : menjadi_bukti
+
+
+
+
+
+    SERI_ASESMEN ||--o{ ASESMEN_RISIKO : memiliki_versi
+
+    ASESMEN_RISIKO o|--o{ ASESMEN_RISIKO : direvisi_menjadi
+
+    ANCAMAN ||--o{ RISIKO : memicu
+
+    KERENTANAN ||--o{ RISIKO : memungkinkan
+
+    RISIKO_KONTROL_INTERNAL ||--o{ RISIKO_KONTROL_SOP : mengunci_acuan
+
+    SOP_VERSI ||--o{ RISIKO_KONTROL_SOP : digunakan
+
+    SOA_DETAIL ||--o{ SOA_DETAIL_RISIKO : didasari
+
+    RISIKO ||--o{ SOA_DETAIL_RISIKO : mendasari
+
+
+
+    classDef master fill:#DBEAFE,stroke:#2563EB,color:#172554
+
+    classDef transaksi fill:#FEF3C7,stroke:#D97706,color:#451A03
+
+    classDef relasi fill:#EDE9FE,stroke:#7C3AED,color:#2E1065
+
+
+
+    class UNIT_ORGANISASI,PEGAWAI,USERS,ROLES master
+
+    class SUMBER_ASET,KATEGORI_ASET,KLASIFIKASI_INFORMASI,ASET master
+
+    class PERIODE_PENILAIAN,VERSI_METODE_RISIKO master
+
+    class SKALA_KEMUNGKINAN,SKALA_DAMPAK,AREA_DAMPAK,KRITERIA_DAMPAK master
+
+    class TINGKAT_RISIKO,MATRIKS_RISIKO master
+
+    class JENIS_ANCAMAN,SUMBER_ANCAMAN,ANCAMAN master
+
+    class JENIS_KERENTANAN,KERENTANAN master
+
+    class STANDAR_KONTROL,KONTROL,REGULASI,RENCANA_KERJA master
+
+    class KONTROL_INTERNAL,SOP master
+
+
+
+    class PENEMPATAN_PEGAWAI,ASESMEN_RISIKO,RISIKO,LOG_AUDIT transaksi
+
+    class ASESMEN_ASET,PENILAIAN_RISIKO transaksi
+
+    class USULAN_KEPUTUSAN,KEPUTUSAN_RISIKO,REVIEW_ASESMEN transaksi
+
+    class RENCANA_PENANGANAN,PROGRES_PENANGANAN transaksi
+
+    class DOKUMEN,DOKUMEN_VERSI,FILE_LAMPIRAN,SOP_VERSI,SOP_REVIEW transaksi
+
+    class SOA,SOA_VERSI,SOA_DETAIL,SOA_REVIEW transaksi
+
+
+
+    class USER_ROLE_SCOPE,PENUGASAN_ASET relasi
+
+    class RISIKO_ASET,RISIKO_PENANGANAN,RISIKO_KONTROL relasi
+
+    class RISIKO_KONTROL_INTERNAL,KONTROL_INTERNAL_STANDAR relasi
+
+    class KONTROL_INTERNAL_SOP,SOP_KONTROL,PENANGANAN_SOP relasi
+
+    class SOA_DETAIL_SOP,DOKUMEN_VERSI_FILE relasi
+
+    class BUKTI_PENILAIAN,BUKTI_SOA,BUKTI_PENANGANAN relasi
+
+    class SERI_ASESMEN transaksi
+
+    class ANCAMAN_SUMBER,RISIKO_KONTROL_SOP,SOA_DETAIL_RISIKO relasi
+
+    class SOA_BENCHMARK relasi
+

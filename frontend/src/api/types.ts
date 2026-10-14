@@ -1,0 +1,13 @@
+import type { components } from './schema'
+export type Pengguna = components['schemas']['Pengguna']
+export type Unit = components['schemas']['Unit']
+export type Pegawai = components['schemas']['Pegawai']
+export type Metode = components['schemas']['Metode']
+export type Master = components['schemas']['Master']
+export type Asesmen = components['schemas']['Asesmen']
+export type Audit = components['schemas']['Audit']
+export type RoleScope = components['schemas']['RoleScope']
+export type Penempatan = components['schemas']['Penempatan']
+export type Skala = components['schemas']['Skala']
+export type TingkatRisiko = components['schemas']['TingkatRisiko']
+export type SelMatriks = components['schemas']['SelMatriks']

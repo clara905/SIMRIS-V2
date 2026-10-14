@@ -1,0 +1,20 @@
+.list {
+  display: flex;
+  gap: 28px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--garis);
+  margin: 8px 0 24px;
+}
+.tab {
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 14px 0;
+  white-space: nowrap;
+  color: var(--teks-kedua);
+}
+.tab[data-state='active'] {
+  color: var(--biru-cap);
+  border-color: var(--biru-cap);
+}

@@ -1,0 +1,7 @@
+dist
+node_modules
+.npm-cache
+artifacts
+public/mockServiceWorker.js
+src/api/schema.d.ts
+src/api/mock.openapi.json

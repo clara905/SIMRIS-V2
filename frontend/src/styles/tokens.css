@@ -1,0 +1,47 @@
+﻿:root {
+  --tinta: #1b2a33;
+  --kertas: #f1f3f7;
+  --lembar: #ffffff;
+  --garis: #d5dce0;
+  --teks-kedua: #5b6b75;
+  --aksen: #b91c2c;
+  --aksen-hover: #941525;
+  --aksen-lembut: #fff0f1;
+  /* Alias kompatibilitas untuk komponen register yang sudah tersedia. */
+  --biru-cap: var(--aksen);
+  --biru-cap-hover: var(--aksen-hover);
+  --biru-cap-tint: var(--aksen-lembut);
+  --durasi-interaksi: 160ms;
+
+  --font-ui: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-padat: 'IBM Plex Sans Condensed', 'IBM Plex Sans', sans-serif;
+  --font-judul: 'IBM Plex Sans', system-ui, sans-serif;
+  --konsol: #141b29;
+  --konsol-teks: #edf1f8;
+  --konsol-sekunder: #b8c2d4;
+  --konsol-garis: #354157;
+  --grid: rgb(72 87 112 / 5%);
+  --cahaya-aksen: 0 0 20px rgb(185 28 44 / 16%);
+
+  --radius-sel: 2px;
+  --radius-kontrol: 8px;
+  --radius-dialog: 12px;
+  --erreur: #a61b1b;
+  --overlay: rgb(27 42 51 / 36%);
+  --shadow: 0 12px 48px rgb(27 42 51 / 18%);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --risk-1: #2e8b7a;
+  --risk-2: #8fb339;
+  --risk-3: #e3b23c;
+  --risk-4: #e07b39;
+  --risk-5: #c23b3b;
+  --dark-tinta: #e8edf0;
+  --dark-kertas: #172127;
+  --dark-lembar: #1e2c35;
+}

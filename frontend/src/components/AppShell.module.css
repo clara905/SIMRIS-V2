@@ -1,0 +1,254 @@
+.shell {
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr);
+  min-height: 100dvh;
+}
+.collapsed {
+  grid-template-columns: 76px minmax(0, 1fr);
+}
+.sidebar {
+  --lembar: var(--konsol);
+  --teks-kedua: var(--konsol-sekunder);
+  --garis: var(--konsol-garis);
+  border-top: 4px solid var(--aksen);
+  background: var(--lembar);
+  border-right: 1px solid var(--garis);
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: 0 16px;
+}
+.brand {
+  height: 92px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--konsol-teks);
+  flex-shrink: 0;
+}
+.brandMark {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 42px;
+  border: 1px solid #ff6978;
+  background: var(--aksen);
+  border-radius: 10px 3px 10px 3px;
+  box-shadow: var(--cahaya-aksen);
+}
+.brand strong {
+  font-size: 22px;
+  letter-spacing: 1px;
+}
+.brand small {
+  display: block;
+  color: var(--teks-kedua);
+  font-size: 11px;
+  letter-spacing: 0;
+}
+.nav {
+  overflow-y: auto;
+  flex: 1;
+}
+.group {
+  color: var(--teks-kedua);
+  font-size: 12px;
+  margin: 22px 12px 8px;
+}
+.group:first-child {
+  margin-top: 5px;
+}
+.nav a {
+  transition:
+    background-color var(--durasi-interaksi) ease,
+    color var(--durasi-interaksi) ease;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 42px;
+  padding: 9px 12px;
+  text-decoration: none;
+  color: var(--teks-kedua);
+  border-radius: var(--radius-kontrol);
+  margin: 2px 0;
+  white-space: nowrap;
+}
+.nav a:hover {
+  background: var(--aksen-lembut);
+  color: var(--aksen);
+}
+.nav a[aria-current='page'] {
+  color: #ffffff;
+  background: var(--aksen);
+  font-weight: 600;
+  box-shadow: var(--cahaya-aksen);
+}
+.nav svg,
+.brandMark {
+  flex-shrink: 0;
+}
+.sidebarFoot {
+  border-top: 1px solid var(--garis);
+  padding: 16px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--teks-kedua);
+  font-size: 12px;
+}
+.sidebar :focus-visible {
+  outline-color: #ff8591;
+}
+.sidebarFoot button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: 0;
+  color: var(--teks-kedua);
+  padding: 4px;
+  text-align: left;
+}
+.workspace {
+  min-width: 0;
+}
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-top: 4px solid var(--aksen);
+  height: 68px;
+  border-bottom: 1px solid var(--garis);
+  background: var(--lembar);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  gap: 16px;
+}
+.breadcrumb,
+.account {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.breadcrumb {
+  font-size: 13px;
+  color: var(--teks-kedua);
+}
+.account {
+  font-size: 13px;
+}
+.account small {
+  display: block;
+  font-size: 12px;
+  color: var(--teks-kedua);
+}
+.avatar {
+  background: var(--biru-cap-tint);
+  color: var(--biru-cap);
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--garis);
+  border-radius: 10px 3px 10px 3px;
+  display: grid;
+  place-items: center;
+  font-weight: 600;
+  font-size: 12px;
+}
+.main {
+  padding: 32px;
+  max-width: 1760px;
+  margin: auto;
+}
+.footer {
+  margin-top: 40px;
+  border-top: 1px solid var(--garis);
+  padding: 18px 0;
+  font-size: 12px;
+  color: var(--teks-kedua);
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.mobileToggle {
+  display: none;
+}
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay);
+  z-index: 30;
+}
+.mobileNav {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: 280px;
+  z-index: 31;
+  background: var(--lembar);
+  padding: 24px;
+  overflow-y: auto;
+  box-shadow: var(--shadow);
+}
+.mobileNav .nav {
+  margin-top: 24px;
+}
+.close {
+  float: right;
+}
+.skip {
+  position: fixed;
+  top: -80px;
+  left: 16px;
+  z-index: 100;
+  padding: 12px;
+  background: var(--lembar);
+}
+.skip:focus {
+  top: 12px;
+}
+@media (max-width: 1100px) {
+  .shell {
+    grid-template-columns: 208px minmax(0, 1fr);
+  }
+  .collapsed {
+    grid-template-columns: 76px minmax(0, 1fr);
+  }
+  .main {
+    padding: 24px;
+  }
+  .topbar {
+    padding: 0 24px;
+  }
+}
+@media (max-width: 767px) {
+  .shell {
+    display: block;
+  }
+  .sidebar {
+    display: none;
+  }
+  .mobileToggle {
+    display: inline-flex;
+  }
+  .topbar {
+    padding: 0 16px;
+    height: 60px;
+  }
+  .main {
+    padding: 24px 16px;
+  }
+  .breadcrumb > span:first-child,
+  .accountText,
+  .avatar {
+    display: none;
+  }
+  .account {
+    gap: 8px;
+  }
+  .footer {
+    flex-direction: column;
+  }
+}

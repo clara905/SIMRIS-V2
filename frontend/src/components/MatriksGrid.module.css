@@ -1,0 +1,101 @@
+.scroll {
+  overflow: auto;
+  padding: 4px;
+}
+.table {
+  border-collapse: separate;
+  border-spacing: 5px;
+  width: 100%;
+  min-width: 680px;
+  table-layout: fixed;
+}
+.table caption {
+  text-align: left;
+  color: var(--teks-kedua);
+  font-size: 12px;
+  padding: 0 0 12px;
+}
+.table th {
+  text-align: left;
+  vertical-align: middle;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--teks-kedua);
+  padding: 4px 10px;
+}
+.table th:first-child {
+  width: 120px;
+}
+.table th strong {
+  display: block;
+  color: var(--tinta);
+  font-size: 14px;
+}
+.table thead th {
+  text-align: center;
+}
+.table td {
+  padding: 0;
+  height: 84px;
+}
+.cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-sel);
+  border: 2px solid transparent;
+  font-size: 11px;
+  padding: 10px 4px;
+  position: relative;
+  font-weight: 500;
+}
+.cell strong {
+  font-size: 22px;
+  font-weight: 600;
+}
+.cell:hover:not(:disabled) {
+  color: inherit;
+  border-color: var(--tinta);
+}
+.cell[aria-pressed='true'] {
+  outline: 3px solid var(--biru-cap);
+  outline-offset: 0;
+}
+.cell[aria-pressed='true']::after {
+  content: '✓';
+  position: absolute;
+  top: 2px;
+  right: 5px;
+  font-size: 14px;
+}
+.empty {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--lembar),
+    var(--lembar) 5px,
+    var(--kertas) 5px,
+    var(--kertas) 10px
+  );
+  color: var(--teks-kedua);
+  border: 1px dashed var(--teks-kedua);
+}
+.tooltip {
+  max-width: 300px;
+  background: var(--tinta);
+  color: var(--lembar);
+  font-size: 12px;
+  padding: 12px;
+  border-radius: var(--radius-kontrol);
+  box-shadow: var(--shadow);
+  z-index: 60;
+}
+.axis {
+  text-align: center;
+  color: var(--teks-kedua);
+  font-size: 12px;
+  padding-top: 12px;
+}
