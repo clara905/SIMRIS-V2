@@ -101,3 +101,16 @@
     padding: 32px 24px;
   }
 }
+
+/* Shared visual direction with the connected workspace. */
+.intro {
+  background:
+    radial-gradient(ellipse at 85% 80%, #ae3548, transparent 60%),
+    linear-gradient(130deg, #621422, #8d2436);
+  --biru-cap: #ffe0e6;
+  --teks-kedua: #f0cdd4;
+  border-right: 0;
+}
+.brand {
+  color: #fff;
+}

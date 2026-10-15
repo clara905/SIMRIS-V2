@@ -23,8 +23,9 @@ const AuditPage = lazy(() => import('./features/audit/AuditPage'))
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
 })
-import Items from "./components/Items";
-
+const BackendWorkspace = lazy(() =>
+  import('./features/workspace/BackendWorkspace').then((m) => ({ default: m.BackendWorkspace })),
+)
 
 export default function App() {
   return (
@@ -42,32 +43,36 @@ export default function App() {
             <Route path="/tanpa-akses" element={<ForbiddenPage />} />
             <Route element={<ProtectedRoute />}>
               <Route path="/ganti-password" element={<PasswordPage />} />
-              <Route element={<AppShell />}>
-                <Route index element={<BerandaPage />} />
-                <Route path="/pengguna" element={<PenggunaPage />} />
-                <Route path="/unit" element={<UnitPage />} />
-                <Route path="/pegawai" element={<PegawaiPage />} />
-                <Route path="/metode-risiko" element={<MetodePage />} />
-                <Route path="/metode-risiko/:id" element={<EditorPage />} />
-                <Route path="/katalog" element={<KatalogPage />} />
-                <Route path="/standar" element={<StandarPage />} />
-                <Route path="/aset" element={<AsetPage />} />
-                <Route path="/periode" element={<PeriodePage />} />
-                <Route path="/monitoring" element={<MonitoringPage />} />
-                <Route path="/monitoring/asesmen/:id" element={<AsesmenPage />} />
-                <Route path="/audit" element={<AuditPage />} />
-                <Route path="/dev/komponen" element={<Gallery />} />
-                <Route
-                  path="*"
-                  element={
-                    <>
-                      <h1>Halaman tidak ditemukan</h1>
-                      <p>Periksa alamat halaman atau kembali ke ruang kerja.</p>
-                      <Link to="/">Kembali ke beranda</Link>
-                    </>
-                  }
-                />
-              </Route>
+              {import.meta.env.VITE_API_MOCK !== 'true' ? (
+                <Route path="*" element={<BackendWorkspace />} />
+              ) : (
+                <Route element={<AppShell />}>
+                  <Route index element={<BerandaPage />} />
+                  <Route path="/pengguna" element={<PenggunaPage />} />
+                  <Route path="/unit" element={<UnitPage />} />
+                  <Route path="/pegawai" element={<PegawaiPage />} />
+                  <Route path="/metode-risiko" element={<MetodePage />} />
+                  <Route path="/metode-risiko/:id" element={<EditorPage />} />
+                  <Route path="/katalog" element={<KatalogPage />} />
+                  <Route path="/standar" element={<StandarPage />} />
+                  <Route path="/aset" element={<AsetPage />} />
+                  <Route path="/periode" element={<PeriodePage />} />
+                  <Route path="/monitoring" element={<MonitoringPage />} />
+                  <Route path="/monitoring/asesmen/:id" element={<AsesmenPage />} />
+                  <Route path="/audit" element={<AuditPage />} />
+                  <Route path="/dev/komponen" element={<Gallery />} />
+                  <Route
+                    path="*"
+                    element={
+                      <>
+                        <h1>Halaman tidak ditemukan</h1>
+                        <p>Periksa alamat halaman atau kembali ke ruang kerja.</p>
+                        <Link to="/">Kembali ke beranda</Link>
+                      </>
+                    }
+                  />
+                </Route>
+              )}
             </Route>
           </Routes>
         </Suspense>

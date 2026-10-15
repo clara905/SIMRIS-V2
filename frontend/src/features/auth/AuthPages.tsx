@@ -11,7 +11,8 @@ import { api, errorMessage, fieldErrors } from '../../api/client'
 import s from './Auth.module.css'
 
 const loginSchema = z.object({
-  email: z.email('Masukkan alamat email yang valid.'),
+  email: z.string().min(1, 'Masukkan username atau email.'),
+  totp: z.string().optional(),
   password: z.string().min(1, 'Masukkan kata sandi.'),
 })
 export function LoginPage() {
@@ -55,18 +56,23 @@ export function LoginPage() {
             } catch (err) {
               setError(errorMessage(err))
               for (const [key, messages] of Object.entries(fieldErrors(err)))
-                if (key === 'email' || key === 'password')
-                  setFieldError(key, { message: messages[0] })
+                if (['email', 'login', 'password', 'totp'].includes(key))
+                  setFieldError(
+                    (key === 'login' ? 'email' : key) as 'email' | 'password' | 'totp',
+                    { message: messages[0] },
+                  )
             }
           })}
           noValidate
         >
           <h1>Masuk ke SIMRIS</h1>
           <p>Gunakan akun instansi untuk membuka ruang kerja Anda.</p>
-          <label htmlFor="email">Email</label>
+          <label htmlFor="email">
+            {import.meta.env.VITE_API_MOCK === 'true' ? 'Email' : 'Username atau email'}
+          </label>
           <input
             id="email"
-            type="email"
+            type="text"
             autoComplete="username"
             {...register('email')}
             aria-invalid={!!errors.email}
@@ -87,6 +93,19 @@ export function LoginPage() {
           <span id="password-error" className="field-error" aria-live="polite">
             {errors.password?.message}
           </span>
+          {import.meta.env.VITE_API_MOCK !== 'true' && (
+            <>
+              <label htmlFor="totp">Kode autentikator (jika diaktifkan)</label>
+              <input
+                id="totp"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                {...register('totp')}
+              />
+              <span className="field-error">{errors.totp?.message}</span>
+            </>
+          )}
           {error && (
             <p role="alert" className="field-error">
               {error}
@@ -114,6 +133,10 @@ export function LoginPage() {
 }
 const passwordSchema = z
   .object({
+    current_password:
+      import.meta.env.VITE_API_MOCK === 'true'
+        ? z.string().optional()
+        : z.string().min(1, 'Masukkan kata sandi saat ini.'),
     password: z.string().min(12, 'Gunakan sedikitnya 12 karakter.'),
     password_confirmation: z.string(),
   })
@@ -136,14 +159,21 @@ export function PasswordPage() {
       <form
         onSubmit={handleSubmit(async (values) => {
           try {
-            await api.post('/api/password', values)
+            await api.post(
+              import.meta.env.VITE_API_MOCK === 'true' ? '/api/password' : '/api/ganti-password',
+              values,
+            )
             await client.invalidateQueries({ queryKey: sessionKey })
             toast.success('Kata sandi diperbarui')
             navigate('/')
           } catch (err) {
             setError(errorMessage(err))
             for (const [key, messages] of Object.entries(fieldErrors(err)))
-              if (key === 'password' || key === 'password_confirmation')
+              if (
+                key === 'password' ||
+                key === 'password_confirmation' ||
+                key === 'current_password'
+              )
                 setFieldError(key, { message: messages[0] })
           }
         })}
@@ -153,6 +183,18 @@ export function PasswordPage() {
           Anda perlu mengganti kata sandi awal sebelum menggunakan SIMRIS. Gunakan sedikitnya 12
           karakter.
         </p>
+        {import.meta.env.VITE_API_MOCK !== 'true' && (
+          <div>
+            <label htmlFor="current_password">Kata sandi saat ini</label>
+            <input
+              id="current_password"
+              type="password"
+              autoComplete="current-password"
+              {...register('current_password')}
+            />
+            <span className="field-error">{errors.current_password?.message}</span>
+          </div>
+        )}
         {(['password', 'password_confirmation'] as const).map((key, index) => (
           <div key={key}>
             <label htmlFor={key}>{index ? 'Konfirmasi kata sandi baru' : 'Kata sandi baru'}</label>

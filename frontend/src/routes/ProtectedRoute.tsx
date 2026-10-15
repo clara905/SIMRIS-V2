@@ -44,13 +44,17 @@ export function ProtectedRoute() {
   }
   if (session.data.wajib_ganti_password && location.pathname !== '/ganti-password')
     return <Navigate to="/ganti-password" replace />
-  if (session.data.role !== 'Super admin')
+  if (
+    import.meta.env.VITE_API_MOCK === 'true'
+      ? session.data.role !== 'Super admin'
+      : !session.data.roleCodes?.length
+  )
     return (
       <Navigate
         to="/tanpa-akses"
         state={{
           reason:
-            'Akun ini tidak memiliki role super admin aktif. Hubungi pengelola akun untuk meninjau role scope Anda.',
+            'Akun ini tidak memiliki role aktif yang sesuai. Hubungi pengelola akun untuk meninjau role scope Anda.',
         }}
         replace
       />

@@ -1,5 +1,33 @@
 # Laporan implementasi
 
+## Pembaruan UI terhubung backend — 14 Oktober 2026
+
+### Hasil
+
+- Ruang kerja baru merah-putih dengan dashboard, sidebar pencarian menu, kartu jumlah data, tahap asesmen, register, dan rincian dalam drawer. Tata letak desktop serta ponsel sudah diperiksa melalui screenshot.
+- Mode pengembangan default berpindah ke backend nyata (`VITE_API_MOCK=false`). Halaman demonstrasi lama tetap tersedia melalui mode mock eksplisit.
+- Login disesuaikan ke field `login`, TOTP opsional, normalisasi respons `/api/me`, dan ganti kata sandi dengan `current_password` melalui `/api/ganti-password`.
+- Akses ruang kerja mendukung role backend aktif; menu pengguna dan audit hanya untuk SUPER_ADMIN. Otorisasi data tetap dilakukan backend.
+- Register membaca endpoint backend untuk asesmen, aset, kepatuhan, dokumen, referensi, organisasi, pegawai, pengguna, dan audit. Jumlah data berasal dari metadata paginasi server; filter ID/status dan perpindahan halaman dikirim ke API.
+- Rincian asesmen menampilkan risiko, rencana penanganan, dan data Lampiran 14. Riwayat versi SOP/SOA/dokumen, unduhan lampiran AMAN, dan ekspor CSV audit memakai endpoint yang sudah tersedia.
+
+### Verifikasi
+
+- Build TypeScript/Vite: lulus. Peringatan ukuran chunk utama di atas 500 kB masih muncul; bukan kegagalan build.
+- ESLint: lulus.
+- Seluruh tes unit frontend: 11 tes lulus dalam 5 berkas.
+- Suite browser khusus kontrak backend: 5 skenario lulus. Mencakup jumlah data, filter/paginasi server, rincian risiko/laporan, akses STAFF, login/TOTP, ganti sandi, error/retry, empty state, dan navigasi ponsel.
+- Axe dashboard: tidak ada pelanggaran WCAG A/AA pada pemeriksaan yang dijalankan. Lebar 390, 768, dan 1024 tidak menyebabkan overflow halaman; screenshot desktop 1440 dan ponsel 390 diperiksa.
+- Tes browser memakai fixture respons sesuai bentuk kontrak backend, bukan login ke database pengguna. Koneksi end-to-end ke server Laravel pengguna belum diverifikasi. Suite browser demonstrasi lama tidak dijalankan ulang.
+- Tidak ada perubahan PHP, skema, atau database; tes Laravel dan Pint tidak dijalankan ulang untuk perubahan frontend ini.
+
+### Asumsi dan batas
+
+- Permintaan UI baru diterapkan sebagai ruang kerja pemantauan sesuai endpoint backend. Form CRUD domain, pengisian penilaian, dan tombol persetujuan belum dihubungkan di UI baru; tidak ada tombol yang mengklaim aksi tersebut sudah tersedia.
+- ID relasi ditampilkan dengan label ID agar tidak dianggap sebagai nama unit atau pegawai yang sudah di-resolve.
+- Template pengaduan aset tidak dianggap sebagai template Lampiran 14. Ekspor dokumen tetap menunggu keputusan template yang sesuai.
+- Tidak memerlukan keputusan skema atau arsitektur baru. Panduan menjalankan dan batas integrasi ada di `frontend/README-SIMRIS.md`.
+
 ## Tahap 0 — selesai
 - DESIGN.md memuat token, lima wireframe, prinsip dan kritik desain awal.
 - Baseline: typecheck, lint, 1 tes, build lulus.

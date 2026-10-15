@@ -14,7 +14,7 @@ describe('Formulaire de connexion', () => {
       </QueryClientProvider>,
     )
     await userEvent.click(screen.getByRole('button', { name: 'Masuk ke ruang kerja' }))
-    expect(await screen.findByText('Masukkan alamat email yang valid.')).toBeInTheDocument()
+    expect(await screen.findByText('Masukkan username atau email.')).toBeInTheDocument()
     expect(screen.getByText('Masukkan kata sandi.')).toBeInTheDocument()
   })
 })
