@@ -1,13 +1,14 @@
-import type { ReactNode } from 'react'
-import s from './PageHeader.module.css'
+import type { ReactNode } from 'react';
+import s from './PageHeader.module.css';
+
 export function PageHeader({
   title,
   description,
   actions,
 }: {
-  title: string
-  description?: string
-  actions?: ReactNode
+  title: string;
+  description?: string;
+  actions?: ReactNode;
 }) {
   return (
     <header className={s.header}>
@@ -17,5 +18,5 @@ export function PageHeader({
       </div>
       {actions && <div className={s.actions}>{actions}</div>}
     </header>
-  )
+  );
 }

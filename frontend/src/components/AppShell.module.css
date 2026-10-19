@@ -32,11 +32,10 @@
   display: grid;
   place-items: center;
   width: 36px;
-  height: 42px;
-  border: 1px solid #ff6978;
-  background: var(--aksen);
-  border-radius: 10px 3px 10px 3px;
-  box-shadow: var(--cahaya-aksen);
+  height: 36px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
 .brand strong {
   font-size: 22px;

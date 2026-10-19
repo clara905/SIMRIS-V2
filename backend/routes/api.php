@@ -23,6 +23,7 @@ Route::get('/items', [ItemController::class, 'index']);
 
 Route::middleware(['auth:sanctum', 'account.active'])->group(function (): void {
     Route::get('/me', [AuthController::class, 'me'])->name('auth.me');
+    Route::put('/profil', [AuthController::class, 'updateProfile'])->name('auth.profile');
     Route::post('/ganti-password', [AuthController::class, 'password'])->name('auth.password');
 });
 

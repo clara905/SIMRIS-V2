@@ -5,30 +5,53 @@
   background: var(--lembar);
 }
 .intro {
-  --kertas: var(--konsol);
-  --tinta: var(--konsol-teks);
-  --teks-kedua: var(--konsol-sekunder);
-  --biru-cap: #ff8591;
+  --kertas: #621422;
+  --tinta: #ffffff;
+  --teks-kedua: #f0cdd4;
+  --biru-cap: #ffe0e6;
   color: var(--tinta);
-  background-image:
-    linear-gradient(var(--konsol-garis) 1px, transparent 1px),
-    linear-gradient(90deg, var(--konsol-garis) 1px, transparent 1px);
-  background-size: 64px 64px;
+  position: relative;
+  overflow: hidden;
   padding: 64px clamp(32px, 6vw, 100px);
-  background: var(--kertas);
-  border-right: 1px solid var(--garis);
+  background:
+    radial-gradient(circle at 30% 45%, rgba(212, 175, 55, 0.18) 0%, transparent 45%),
+    radial-gradient(ellipse at 25% 80%, rgba(174, 53, 72, 0.45) 0%, transparent 60%),
+    linear-gradient(135deg, #440c16 0%, #621422 45%, #7e1d2f 100%);
+  border-right: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
 }
+.intro::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: clamp(-40px, 4vw, 40px);
+  transform: translateY(-50%);
+  width: min(560px, 85vw);
+  height: min(560px, 85vw);
+  background-image: url('/logo-kemhan.png');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  opacity: 0.16;
+  pointer-events: none;
+  filter: drop-shadow(0 0 50px rgba(0, 0, 0, 0.45));
+  mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
+  -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
+}
+.intro > * {
+  position: relative;
+  z-index: 1;
+}
 .brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: var(--biru-cap);
-  font-size: 22px;
-  font-weight: 600;
-  margin-bottom: 72px;
+  display: block;
+  color: #ffffff;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  line-height: 1;
+  margin-bottom: 64px;
 }
 .intro h1 {
   font-size: 48px;
@@ -43,7 +66,7 @@
 }
 .register {
   margin-top: 48px;
-  border-top: 2px solid var(--biru-cap);
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
   padding-top: 16px;
   display: flex;
   gap: 24px;
@@ -71,6 +94,134 @@
   width: 100%;
   margin-top: 12px;
 }
+.googleBtn {
+  width: 100%;
+  background: #ffffff;
+  color: #3c4043;
+  border: 1px solid #dadce0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-weight: 500;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.googleBtn:hover:not(:disabled) {
+  background: #f8f9fa;
+  border-color: #c6c9ce;
+  color: #202124;
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.2);
+}
+.divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 20px 0;
+  color: var(--teks-kedua);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--garis);
+}
+.divider span {
+  padding: 0 14px;
+}
+.passwordWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.captchaContainer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.captchaCanvas {
+  background: #f1f3f5;
+  border: 1px solid var(--garis);
+  border-radius: var(--radius-kontrol);
+  height: 42px;
+  width: 140px;
+  cursor: pointer;
+  user-select: none;
+}
+.reloadCaptchaBtn {
+  background: var(--lembar);
+  border: 1px solid var(--garis);
+  color: var(--teks-kedua);
+  min-height: 42px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: var(--radius-kontrol);
+}
+.reloadCaptchaBtn:hover:not(:disabled) {
+  color: var(--tinta);
+  border-color: var(--biru-cap);
+}
+
+.passwordWrapper input {
+  width: 100%;
+  padding-right: 42px;
+}
+.togglePassword {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  min-height: unset;
+  padding: 6px;
+  color: var(--teks-kedua);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.togglePassword:hover:not(:disabled) {
+  color: var(--tinta);
+  background: transparent;
+}
+.switchMethod {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--teks-kedua);
+}
+.switchMethod a {
+  font-weight: 500;
+  color: var(--biru-cap);
+  text-decoration: none;
+}
+.switchMethod a:hover {
+  text-decoration: underline;
+}
+.switchMode {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--teks-kedua);
+}
+.switchMode a {
+  font-weight: 500;
+  color: var(--biru-cap);
+  text-decoration: none;
+}
+.switchMode a:hover {
+  text-decoration: underline;
+}
 .demo {
   border-top: 1px solid var(--garis);
   padding-top: 20px;
@@ -78,6 +229,7 @@
   font-size: 12px;
   color: var(--teks-kedua);
 }
+
 @media (max-width: 767px) {
   .page {
     display: block;
@@ -87,8 +239,17 @@
     border-right: 0;
     border-bottom: 1px solid var(--garis);
   }
+  .intro::before {
+    left: -10px;
+    right: auto;
+    width: 220px;
+    height: 220px;
+    opacity: 0.12;
+  }
   .brand {
     margin-bottom: 24px;
+    font-size: 20px;
+    letter-spacing: 2.5px;
   }
   .intro h1 {
     font-size: 28px;
@@ -100,17 +261,4 @@
   .formSide {
     padding: 32px 24px;
   }
-}
-
-/* Shared visual direction with the connected workspace. */
-.intro {
-  background:
-    radial-gradient(ellipse at 85% 80%, #ae3548, transparent 60%),
-    linear-gradient(130deg, #621422, #8d2436);
-  --biru-cap: #ffe0e6;
-  --teks-kedua: #f0cdd4;
-  border-right: 0;
-}
-.brand {
-  color: #fff;
 }

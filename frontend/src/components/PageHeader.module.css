@@ -44,3 +44,11 @@
     font-size: 32px;
   }
 }
+.backButton {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+  margin-right: 8px;
+}

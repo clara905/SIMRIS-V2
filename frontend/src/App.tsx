@@ -4,8 +4,8 @@ import { BrowserRouter, Link, Route, Routes } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { AppShell } from './components/AppShell'
 import { ProtectedRoute } from './routes/ProtectedRoute'
-import { ForbiddenPage, LoginPage, PasswordPage } from './features/auth/AuthPages'
-import { Skeleton } from './components/States'
+import { ForbiddenPage, LoginPage, PasswordPage, RegisterPage } from './features/auth/AuthPages'
+import { AppLoader } from './components/AppLoader'
 const Gallery = lazy(() => import('./components/Gallery').then((m) => ({ default: m.Gallery })))
 const PenggunaPage = lazy(() => import('./features/pengguna/PenggunaPage'))
 const UnitPage = lazy(() => import('./features/unit/UnitPage'))
@@ -31,15 +31,10 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <Suspense
-          fallback={
-            <main className="session-loading">
-              <Skeleton />
-            </main>
-          }
-        >
+        <Suspense fallback={<AppLoader message="Memuat aplikasi…" />}>
           <Routes>
             <Route path="/masuk" element={<LoginPage />} />
+            <Route path="/daftar" element={<RegisterPage />} />
             <Route path="/tanpa-akses" element={<ForbiddenPage />} />
             <Route element={<ProtectedRoute />}>
               <Route path="/ganti-password" element={<PasswordPage />} />

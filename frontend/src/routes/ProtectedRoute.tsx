@@ -3,6 +3,7 @@ import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { sessionKey, useSession } from '../api/auth'
 import { errorMessage } from '../api/client'
+import { AppLoader } from '../components/AppLoader'
 import axios from 'axios'
 export function ProtectedRoute() {
   const session = useSession()
@@ -23,14 +24,7 @@ export function ProtectedRoute() {
       window.removeEventListener('simris:forbidden', forbidden)
     }
   }, [client, navigate])
-  if (session.isPending)
-    return (
-      <main className="session-loading" aria-label="Memuat sesi">
-        <div className="skeleton" />
-        <div className="skeleton" />
-        <p role="status">Memeriksa sesi…</p>
-      </main>
-    )
+  if (session.isPending) return <AppLoader message="Memeriksa sesi pengguna…" />
   if (session.isError) {
     if (axios.isAxiosError(session.error) && session.error.response?.status === 401)
       return <Navigate to="/masuk" state={{ from: location.pathname }} replace />

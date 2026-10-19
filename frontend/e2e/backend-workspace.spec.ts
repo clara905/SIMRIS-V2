@@ -40,6 +40,16 @@ async function setup(page: Page, role = 'SUPER_ADMIN', password = false) {
               unit_pemilik_id: 2,
               kondisi: 'BAIK',
               status: 'AKTIF',
+              perlu_ditinjau: true,
+            },
+            {
+              id: 2,
+              kode_aset: 'AST-002',
+              nama: 'Workstation analis',
+              unit_pemilik_id: 2,
+              kondisi: 'BAIK',
+              status: 'AKTIF',
+              perlu_ditinjau: false,
             },
           ]
         : []
@@ -47,8 +57,11 @@ async function setup(page: Page, role = 'SUPER_ADMIN', password = false) {
       data = [{ id: 5, kode: 'R-001', skenario: 'Gangguan layanan informasi' }]
     const id = url.searchParams.get('filter[id]')
     const status = url.searchParams.get('filter[status]')
+    const perluDitinjau = url.searchParams.get('filter[perlu_ditinjau]')
     if (id) data = data.filter((r) => String(r.id) === id)
     if (status) data = data.filter((r) => r.status === status)
+    if (perluDitinjau !== null)
+      data = data.filter((r) => String(Boolean(r.perlu_ditinjau)) === perluDitinjau)
     const current = Number(url.searchParams.get('page') || 1)
     const size = Number(url.searchParams.get('per_page') || 10)
     const slice = data.slice((current - 1) * size, current * size)
@@ -116,6 +129,41 @@ test('staff can enter workspace but cannot open administration', async ({ page }
   await expect(page.getByRole('link', { name: 'Jejak audit' })).toHaveCount(0)
   await page.goto('/pengguna')
   await expect(page.getByRole('heading', { name: 'Halaman tidak tersedia' })).toBeVisible()
+})
+test('sidebar profile link opens the signed-in user profile', async ({ page }) => {
+  await setup(page)
+  await page.goto('/')
+  await expect(page.getByText('Akses sesuai kewenangan')).toHaveCount(0)
+  await expect(page.getByText('Lingkup unit mengikuti role aktif')).toHaveCount(0)
+  await page.getByRole('link', { name: 'Buka profil Petugas Pengujian' }).click()
+  await expect(page).toHaveURL(/\/profil$/)
+  await expect(page.getByRole('heading', { name: 'Profil' })).toBeVisible()
+  await expect(page.getByText('penguji@example.test')).toBeVisible()
+  const profile = page.getByRole('region', { name: 'Informasi profil' })
+  await expect(profile.getByRole('definition').filter({ hasText: 'SUPER_ADMIN' })).toBeVisible()
+  await expect(profile.getByRole('definition').filter({ hasText: 'Unit 2' })).toBeVisible()
+})
+test('logout requires confirmation before ending the session', async ({ page }) => {
+  await setup(page)
+  let logoutRequests = 0
+  await page.route('**/logout', (route) => {
+    logoutRequests += 1
+    return route.fulfill({ json: { message: 'OK' } })
+  })
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'Keluar', exact: true }).click()
+  const confirmation = page.getByRole('alertdialog')
+  await expect(confirmation).toBeVisible()
+  expect(logoutRequests).toBe(0)
+  await confirmation.getByRole('button', { name: 'Batal' }).click()
+  await expect(confirmation).toBeHidden()
+  expect(logoutRequests).toBe(0)
+
+  await page.getByRole('button', { name: 'Keluar', exact: true }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Ya, keluar' }).click()
+  await expect(page).toHaveURL(/masuk/)
+  expect(logoutRequests).toBe(1)
 })
 test('login sends backend login and optional TOTP, password change sends current password', async ({
   page,

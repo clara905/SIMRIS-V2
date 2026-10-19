@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
+  Bell,
   Menu,
   X,
   Download,
@@ -19,10 +20,15 @@ import {
   CircleCheck,
   Layers,
   FileCheck2,
+  Boxes,
+  AlertTriangle,
+  UserCheck,
+  Edit3,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, errorMessage } from '../../api/client'
-import { logout, useSession } from '../../api/auth'
+import { logout, updateProfile, useSession, sessionKey } from '../../api/auth'
+import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Drawer } from '../../components/Drawer'
 import { modules, label, display, type Resource } from './resources'
 import './workspace.css'
@@ -50,9 +56,9 @@ async function getPage(
 }
 function Status({ value }: { value: unknown }) {
   const status = display(value)
-  const tone = ['DISAHKAN', 'AMAN', 'FINAL', 'SELESAI'].includes(status)
+  const tone = ['DISAHKAN', 'AMAN', 'FINAL', 'SELESAI', 'SUDAH_DINILAI'].includes(status)
     ? 'success'
-    : ['DITOLAK', 'TIDAK_DITEMUKAN'].includes(status)
+    : ['DITOLAK', 'TIDAK_DITEMUKAN', 'BELUM_DINILAI'].includes(status)
       ? 'danger'
       : status === 'DRAFT'
         ? 'neutral'
@@ -76,9 +82,10 @@ function Failure({ error, retry }: { error: unknown; retry: () => void }) {
 function Loading() {
   return (
     <div className="ws-loading" role="status" aria-label="Memuat data">
-      <div />
-      <div />
-      <div />
+      <div className="ws-loading-aura">
+        <div className="ws-loading-spinner" />
+        <img src="/logo-kemhan.png" alt="" className="ws-loading-logo" />
+      </div>
       <span>Memuat data...</span>
     </div>
   )
@@ -103,6 +110,7 @@ export function BackendWorkspace() {
   const location = useLocation()
   const [mobile, setMobile] = useState(false)
   const [leaving, setLeaving] = useState(false)
+  const [logoutConfirm, setLogoutConfirm] = useState(false)
   const [navSearch, setNavSearch] = useState('')
   const allowed = modules.filter(
     (m) => !m.admin || session.data?.roleCodes?.includes('SUPER_ADMIN'),
@@ -129,7 +137,7 @@ export function BackendWorkspace() {
   const brand = (
     <Link to="/" className="ws-brand">
       <span>
-        <ShieldCheck size={25} />
+        <img src="/logo-kemhan.png" alt="Logo Kemhan" style={{ width: 40, height: 40, objectFit: 'contain' }} />
       </span>
       <div>
         SIMRIS<small>GOVERNANCE WORKSPACE</small>
@@ -153,12 +161,17 @@ export function BackendWorkspace() {
           />
         </div>
         {navigation}
-        <div className="ws-sidebar-note">
-          <LockKeyhole size={18} />
+        <Link
+          to="/profil"
+          className="ws-account"
+          aria-label={`Buka profil ${session.data?.nama ?? 'pengguna'}`}
+        >
+          <span className="ws-avatar">{session.data?.nama.slice(0, 2).toUpperCase()}</span>
           <div>
-            Akses sesuai kewenangan<small>Lingkup unit mengikuti role aktif</small>
+            {session.data?.nama}
+            <small>{session.data?.role}</small>
           </div>
-        </div>
+        </Link>
       </aside>
       <div className="ws-body">
         <header className="ws-topbar">
@@ -179,38 +192,41 @@ export function BackendWorkspace() {
                 </Dialog.Content>
               </Dialog.Portal>
             </Dialog.Root>
-            <span>Ruang kerja</span>
-            <ChevronRight size={14} />
-            <strong>{active?.label || 'Halaman'}</strong>
+            <Link to="/" className="ws-breadcrumb-home">
+              Ruang kerja
+            </Link>
+            <ChevronRight size={14} aria-hidden="true" />
+            {location.pathname === '/profil' ? (
+              <strong>Profil</strong>
+            ) : active ? (
+              <Link to={active.path} aria-current="page" className="ws-breadcrumb-current">
+                {active.label}
+              </Link>
+            ) : (
+              <strong>Halaman</strong>
+            )}
           </div>
-          <div className="ws-account">
-            <span className="ws-avatar">{session.data?.nama.slice(0, 2).toUpperCase()}</span>
-            <div>
-              {session.data?.nama}
-              <small>{session.data?.role}</small>
-            </div>
+          <div className="ws-header-actions">
+            <button
+              aria-label="Notifikasi"
+              title="Notifikasi"
+              onClick={() => toast.info('Belum ada notifikasi baru.')}
+            >
+              <Bell size={17} />
+            </button>
             <button
               aria-label="Keluar"
               disabled={leaving}
-              onClick={async () => {
-                setLeaving(true)
-                try {
-                  await logout()
-                  client.clear()
-                  navigate('/masuk', { replace: true })
-                } catch (error) {
-                  toast.error(errorMessage(error))
-                } finally {
-                  setLeaving(false)
-                }
-              }}
+              onClick={() => setLogoutConfirm(true)}
             >
               <LogOut size={17} />
             </button>
           </div>
         </header>
         <main id="workspace-content" className="ws-content" tabIndex={-1}>
-          {!active ? (
+          {location.pathname === '/profil' ? (
+            <Profile session={session.data} />
+          ) : !active ? (
             <section className="ws-panel ws-empty">
               <h1>Halaman tidak tersedia</h1>
               <p>Periksa alamat atau hak akses akun Anda.</p>
@@ -230,6 +246,7 @@ export function BackendWorkspace() {
                   <LockKeyhole size={14} /> Tampilan pemantauan
                 </span>
               </div>
+              {active.path === '/aset' && <AsetMonitor />}
               <Registry key={active.path} resources={active.resources} />
             </>
           )}
@@ -239,7 +256,320 @@ export function BackendWorkspace() {
           </footer>
         </main>
       </div>
+      <ConfirmDialog
+        open={logoutConfirm}
+        onClose={() => setLogoutConfirm(false)}
+        title="Konfirmasi keluar"
+        description={['Apakah Anda yakin ingin keluar dari akun ini?']}
+        confirmLabel="Ya, keluar"
+        pending={leaving}
+        onConfirm={async () => {
+          setLeaving(true)
+          try {
+            await logout()
+            client.clear()
+            navigate('/masuk', { replace: true })
+          } catch (error) {
+            toast.error(errorMessage(error))
+          } finally {
+            setLeaving(false)
+          }
+        }}
+      />
     </div>
+  )
+}
+function Profile({ session }: { session: ReturnType<typeof useSession>['data'] }) {
+  const client = useQueryClient()
+  const [isEditing, setIsEditing] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [nama, setNama] = useState(session?.pegawai?.nama || session?.nama || '')
+  const [emailKontak, setEmailKontak] = useState(
+    session?.pegawai?.email_kontak || session?.email || '',
+  )
+  const [nip, setNip] = useState(session?.pegawai?.nip || '')
+  const [jenisKepegawaian, setJenisKepegawaian] = useState(
+    session?.pegawai?.jenis_kepegawaian || 'PNS',
+  )
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSaving(true)
+    try {
+      await updateProfile({
+        nama,
+        email_kontak: emailKontak,
+        nip: nip.trim() ? nip.trim() : null,
+        jenis_kepegawaian: jenisKepegawaian || 'PNS',
+      })
+      await client.invalidateQueries({ queryKey: sessionKey })
+      toast.success('Data profil berhasil diperbarui')
+      setIsEditing(false)
+    } catch (err) {
+      toast.error(errorMessage(err))
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <>
+      <div className="ws-page-heading">
+        <div>
+          <span className="ws-eyebrow">Akun</span>
+          <h1>Profil</h1>
+          <p>Informasi akun, kepegawaian, dan role aktif Anda.</p>
+        </div>
+        <button
+          type="button"
+          className="primary"
+          onClick={() => {
+            if (!isEditing) {
+              setNama(session?.pegawai?.nama || session?.nama || '')
+              setEmailKontak(session?.pegawai?.email_kontak || session?.email || '')
+              setNip(session?.pegawai?.nip || '')
+              setJenisKepegawaian(session?.pegawai?.jenis_kepegawaian || 'PNS')
+            }
+            setIsEditing((prev) => !prev)
+          }}
+        >
+          <Edit3 size={15} />
+          {isEditing ? 'Batal Edit' : 'Lengkapi / Ubah Data Profil'}
+        </button>
+      </div>
+      <section className="ws-profile" aria-label="Informasi profil">
+        <div className="ws-profile-identity">
+          <span className="ws-avatar" aria-hidden="true">
+            {session?.nama.slice(0, 2).toUpperCase()}
+          </span>
+          <div>
+            <h2>{session?.nama ?? 'Memuat profil...'}</h2>
+            <p>{session?.role ?? 'Role belum tersedia'}</p>
+          </div>
+        </div>
+
+        {isEditing ? (
+          <form className="ws-profile-edit ws-profile-form" onSubmit={handleSave}>
+            <h3>Lengkapi Data Profil</h3>
+            <div className="ws-profile-form-grid">
+              <div className="ws-profile-field">
+                <label htmlFor="profil-nama">Nama Lengkap</label>
+                <input
+                  id="profil-nama"
+                  type="text"
+                  required
+                  value={nama}
+                  onChange={(e) => setNama(e.target.value)}
+                  placeholder="Nama lengkap pegawai"
+                  disabled={isSaving}
+                />
+              </div>
+
+              <div className="ws-profile-field">
+                <label htmlFor="profil-email-kontak">Email Kontak</label>
+                <input
+                  id="profil-email-kontak"
+                  type="email"
+                  required
+                  value={emailKontak}
+                  onChange={(e) => setEmailKontak(e.target.value)}
+                  placeholder="nama@instansi.go.id"
+                  disabled={isSaving}
+                />
+              </div>
+
+              <div className="ws-profile-field">
+                <label htmlFor="profil-nip">NIP (Opsional)</label>
+                <input
+                  id="profil-nip"
+                  type="text"
+                  maxLength={18}
+                  value={nip}
+                  onChange={(e) => setNip(e.target.value)}
+                  placeholder="18 digit angka NIP"
+                  disabled={isSaving}
+                />
+              </div>
+
+              <div className="ws-profile-field">
+                <label htmlFor="profil-jenis">Jenis Kepegawaian</label>
+                <select
+                  id="profil-jenis"
+                  value={jenisKepegawaian}
+                  onChange={(e) => setJenisKepegawaian(e.target.value)}
+                  disabled={isSaving}
+                >
+                  <option value="PNS">PNS</option>
+                  <option value="PPPK">PPPK</option>
+                  <option value="TNI">TNI</option>
+                  <option value="NON_ASN">Non-ASN / Honorer</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="ws-profile-actions">
+              <button type="submit" className="primary" disabled={isSaving}>
+                <UserCheck size={16} />
+                {isSaving ? 'Menyimpan…' : 'Simpan Perubahan'}
+              </button>
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={() => setIsEditing(false)}
+              >
+                Batal
+              </button>
+            </div>
+          </form>
+        ) : (
+          <dl>
+            <div>
+              <dt>ID pengguna</dt>
+              <dd>{session?.id ?? '-'}</dd>
+            </div>
+            <div>
+              <dt>Username</dt>
+              <dd>{session?.username ?? '-'}</dd>
+            </div>
+            <div>
+              <dt>Nama Pegawai</dt>
+              <dd>{session?.nama ?? '-'}</dd>
+            </div>
+            <div>
+              <dt>Email Login Akun</dt>
+              <dd>{session?.email ?? '-'}</dd>
+            </div>
+            <div>
+              <dt>Email Kontak</dt>
+              <dd>{session?.pegawai?.email_kontak || '-'}</dd>
+            </div>
+            <div>
+              <dt>NIP</dt>
+              <dd>{session?.pegawai?.nip || 'Belum diisi'}</dd>
+            </div>
+            <div>
+              <dt>Jenis Kepegawaian</dt>
+              <dd>{session?.pegawai?.jenis_kepegawaian || '-'}</dd>
+            </div>
+            <div>
+              <dt>Role aktif</dt>
+              <dd>{session?.role ?? '-'}</dd>
+            </div>
+            <div>
+              <dt>Lingkup unit</dt>
+              <dd>
+                {session?.unitIds?.length
+                  ? session.unitIds.map((unitId) => `Unit ${unitId}`).join(', ')
+                  : 'Mengikuti kewenangan role aktif'}
+              </dd>
+            </div>
+            <div>
+              <dt>Status kata sandi</dt>
+              <dd>{session?.wajib_ganti_password ? 'Perlu diganti' : 'Aktif'}</dd>
+            </div>
+          </dl>
+        )}
+      </section>
+    </>
+  )
+}
+function AsetMonitor() {
+  const [params, setParams] = useSearchParams()
+  const activeTab = params.get('tab') || 'aset'
+
+  const total = useQuery({
+    queryKey: ['workspace', 'count', '/api/aset', 'all'],
+    queryFn: ({ signal }) => getPage('/api/aset', { per_page: 1 }, signal),
+  })
+  const belum = useQuery({
+    queryKey: ['workspace', 'count', '/api/aset', 'belum_dinilai'],
+    queryFn: ({ signal }) =>
+      getPage('/api/aset', { per_page: 1, filter: { perlu_ditinjau: true } }, signal),
+  })
+  const sudah = useQuery({
+    queryKey: ['workspace', 'count', '/api/aset', 'sudah_dinilai'],
+    queryFn: ({ signal }) =>
+      getPage('/api/aset', { per_page: 1, filter: { perlu_ditinjau: false } }, signal),
+  })
+
+  function selectTab(tabKey: string) {
+    const next = new URLSearchParams(params)
+    next.set('tab', tabKey)
+    next.delete('page')
+    setParams(next)
+  }
+
+  return (
+    <section className="ws-metrics" aria-label="Pemantauan penilaian aset">
+      <button
+        type="button"
+        className="ws-metric"
+        onClick={() => selectTab('aset')}
+        style={
+          activeTab === 'aset'
+            ? { borderColor: '#b91c2c', boxShadow: '0 0 0 1px #b91c2c' }
+            : undefined
+        }
+      >
+        <div>
+          <span>Total aset terdaftar</span>
+          <Boxes size={20} />
+        </div>
+        <strong>
+          {total.isPending ? '...' : total.isError ? '-' : total.data?.meta.total.toLocaleString('id-ID')}
+        </strong>
+        <small>
+          Semua inventaris aset dalam lingkup
+          <ArrowUpRight size={14} />
+        </small>
+      </button>
+
+      <button
+        type="button"
+        className="ws-metric"
+        onClick={() => selectTab('aset-belum-dinilai')}
+        style={{
+          borderColor: activeTab === 'aset-belum-dinilai' ? '#b91c2c' : '#f5c2c7',
+          background: activeTab === 'aset-belum-dinilai' ? '#fff8f8' : 'white',
+          boxShadow: activeTab === 'aset-belum-dinilai' ? '0 0 0 1px #b91c2c' : undefined,
+        }}
+      >
+        <div>
+          <span style={{ color: '#b91c2c', fontWeight: 600 }}>Aset belum dinilai</span>
+          <AlertTriangle size={20} style={{ color: '#b91c2c' }} />
+        </div>
+        <strong style={{ color: '#b91c2c' }}>
+          {belum.isPending ? '...' : belum.isError ? '-' : belum.data?.meta.total.toLocaleString('id-ID')}
+        </strong>
+        <small style={{ color: '#8c1624' }}>
+          Menunggu proses penilaian risiko
+          <ArrowUpRight size={14} />
+        </small>
+      </button>
+
+      <button
+        type="button"
+        className="ws-metric"
+        onClick={() => selectTab('aset-dinilai')}
+        style={{
+          borderColor: activeTab === 'aset-dinilai' ? '#16a34a' : '#bbf7d0',
+          background: activeTab === 'aset-dinilai' ? '#f0fdf4' : 'white',
+          boxShadow: activeTab === 'aset-dinilai' ? '0 0 0 1px #16a34a' : undefined,
+        }}
+      >
+        <div>
+          <span style={{ color: '#15803d', fontWeight: 600 }}>Aset sudah dinilai</span>
+          <CircleCheck size={20} style={{ color: '#16a34a' }} />
+        </div>
+        <strong style={{ color: '#15803d' }}>
+          {sudah.isPending ? '...' : sudah.isError ? '-' : sudah.data?.meta.total.toLocaleString('id-ID')}
+        </strong>
+        <small style={{ color: '#166534' }}>
+          Telah dinilai dalam asesmen risiko
+          <ArrowUpRight size={14} />
+        </small>
+      </button>
+    </section>
   )
 }
 function Overview() {
@@ -263,9 +593,17 @@ function Overview() {
     {
       label: 'Aset terinventaris',
       endpoint: '/api/aset',
-      icon: ShieldCheck,
+      icon: Boxes,
       path: '/aset',
       description: 'Dalam lingkup akses Anda',
+    },
+    {
+      label: 'Aset belum dinilai',
+      endpoint: '/api/aset',
+      filter: { perlu_ditinjau: true },
+      icon: AlertTriangle,
+      path: '/aset?tab=aset-belum-dinilai',
+      description: 'Menunggu penilaian risiko',
     },
     {
       label: 'Dokumen pendukung',
@@ -497,6 +835,7 @@ function Registry({ resources }: { resources: Resource[] }) {
   const [idDraft, setIdDraft] = useState(id)
   const [selected, setSelected] = useState<Row | null>(null)
   const filter = {
+    ...(resource.defaultFilter || {}),
     ...(id ? { id } : {}),
     ...(status && resource.statuses?.includes(status)
       ? { [resource.statusField || 'status']: status }
@@ -622,19 +961,29 @@ function Registry({ resources }: { resources: Resource[] }) {
                   <tbody>
                     {query.data.data.map((row) => (
                       <tr key={row.id}>
-                        {resource.columns.map((c, i) => (
-                          <td key={c}>
-                            {c.includes('status') ? (
-                              <Status value={row[c]} />
-                            ) : i === 0 ? (
-                              <button className="ws-cell-link" onClick={() => setSelected(row)}>
-                                {display(row[c])}
-                              </button>
-                            ) : (
-                              display(row[c])
-                            )}
-                          </td>
-                        ))}
+                        {resource.columns.map((c, i) => {
+                          const val =
+                            c === 'status_penilaian'
+                              ? row.perlu_ditinjau === false ||
+                                row.perlu_ditinjau === 0 ||
+                                row.perlu_ditinjau === '0'
+                                ? 'SUDAH_DINILAI'
+                                : 'BELUM_DINILAI'
+                              : row[c]
+                          return (
+                            <td key={c}>
+                              {c.includes('status') ? (
+                                <Status value={val} />
+                              ) : i === 0 ? (
+                                <button className="ws-cell-link" onClick={() => setSelected(row)}>
+                                  {display(val)}
+                                </button>
+                              ) : (
+                                display(val)
+                              )}
+                            </td>
+                          )
+                        })}
                         <td>
                           <button
                             aria-label={'Lihat rincian ' + row.id}
@@ -756,6 +1105,8 @@ function RecordDetail({ row, resource }: { row: Row; resource: Resource }) {
               <dd>
                 {key.includes('status') ? (
                   <Status value={value} />
+                ) : key === 'perlu_ditinjau' ? (
+                  <Status value={value ? 'BELUM_DINILAI' : 'SUDAH_DINILAI'} />
                 ) : typeof value === 'object' && value !== null ? (
                   <pre>{JSON.stringify(value, null, 2)}</pre>
                 ) : (

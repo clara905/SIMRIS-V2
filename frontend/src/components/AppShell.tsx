@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Dialog } from 'radix-ui'
 import {
-  ShieldCheck,
   PanelLeftClose,
   PanelLeftOpen,
   Menu,
@@ -15,6 +14,7 @@ import { toast } from 'sonner'
 import { navigation } from '../lib/navigation'
 import { logout, useSession } from '../api/auth'
 import { errorMessage } from '../api/client'
+import { ConfirmDialog } from './ConfirmDialog'
 import s from './AppShell.module.css'
 import { KeyboardShortcuts } from './KeyboardShortcuts'
 
@@ -24,6 +24,7 @@ export function AppShell() {
   )
   const [mobile, setMobile] = useState(false)
   const [leaving, setLeaving] = useState(false)
+  const [logoutConfirm, setLogoutConfirm] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
   const client = useQueryClient()
@@ -60,7 +61,7 @@ export function AppShell() {
       <aside className={s.sidebar} aria-label="Menu aplikasi">
         <div className={s.brand}>
           <span className={s.brandMark}>
-            <ShieldCheck size={24} />
+            <img src="/logo-kemhan.png" alt="Logo Kemhan" style={{ width: 36, height: 36, objectFit: 'contain' }} />
           </span>
           {!collapsed && (
             <div>
@@ -127,18 +128,7 @@ export function AppShell() {
               className="icon-button"
               aria-label="Keluar"
               disabled={leaving}
-              onClick={async () => {
-                setLeaving(true)
-                try {
-                  await logout()
-                  client.clear()
-                  navigate('/masuk', { replace: true })
-                } catch (error) {
-                  toast.error(errorMessage(error))
-                } finally {
-                  setLeaving(false)
-                }
-              }}
+              onClick={() => setLogoutConfirm(true)}
             >
               <LogOut size={18} />
             </button>
@@ -156,6 +146,26 @@ export function AppShell() {
           </footer>
         </main>
       </div>
+      <ConfirmDialog
+        open={logoutConfirm}
+        onClose={() => setLogoutConfirm(false)}
+        title="Konfirmasi keluar"
+        description={['Apakah Anda yakin ingin keluar dari akun ini?']}
+        confirmLabel="Ya, keluar"
+        pending={leaving}
+        onConfirm={async () => {
+          setLeaving(true)
+          try {
+            await logout()
+            client.clear()
+            navigate('/masuk', { replace: true })
+          } catch (error) {
+            toast.error(errorMessage(error))
+          } finally {
+            setLeaving(false)
+          }
+        }}
+      />
     </div>
   )
 }

@@ -4,35 +4,37 @@ import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { ShieldCheck, LockKeyhole } from 'lucide-react'
-import { toast } from 'sonner'
-import { login, sessionKey } from '../../api/auth'
-import { api, errorMessage, fieldErrors } from '../../api/client'
+import { Eye, EyeOff, LockKeyhole, ShieldCheck, UserPlus } from 'lucide-react'
+import { login, register, sessionKey, normalizeSession } from '../../api/auth'
+import { errorMessage, fieldErrors } from '../../api/client'
 import s from './Auth.module.css'
 
+/* ─── Login ─────────────────────────────────────────────────────────────── */
+
 const loginSchema = z.object({
-  email: z.string().min(1, 'Masukkan username atau email.'),
-  totp: z.string().optional(),
+  login: z.string().min(1, 'Masukkan username atau email.'),
   password: z.string().min(1, 'Masukkan kata sandi.'),
+  totp: z.string().optional(),
 })
+
 export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const client = useQueryClient()
   const [error, setError] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+
   const {
-    register,
+    register: reg,
     handleSubmit,
     setError: setFieldError,
     formState: { errors, isSubmitting },
   } = useForm<z.infer<typeof loginSchema>>({ resolver: zodResolver(loginSchema) })
+
   return (
     <div className={s.page}>
       <section className={s.intro}>
-        <div className={s.brand}>
-          <ShieldCheck size={32} />
-          SIMRIS
-        </div>
+        <div className={s.brand}>SIMRIS</div>
         <h1>
           Tertib mengelola.
           <br />
@@ -55,71 +57,80 @@ export function LoginPage() {
               navigate(location.state?.from || '/', { replace: true })
             } catch (err) {
               setError(errorMessage(err))
-              for (const [key, messages] of Object.entries(fieldErrors(err)))
-                if (['email', 'login', 'password', 'totp'].includes(key))
-                  setFieldError(
-                    (key === 'login' ? 'email' : key) as 'email' | 'password' | 'totp',
-                    { message: messages[0] },
-                  )
+              for (const [key, messages] of Object.entries(fieldErrors(err))) {
+                if (['login', 'password'].includes(key)) {
+                  setFieldError(key as 'login' | 'password', { message: messages[0] })
+                }
+              }
             }
           })}
           noValidate
         >
           <h1>Masuk ke SIMRIS</h1>
-          <p>Gunakan akun instansi untuk membuka ruang kerja Anda.</p>
-          <label htmlFor="email">
-            {import.meta.env.VITE_API_MOCK === 'true' ? 'Email' : 'Username atau email'}
-          </label>
+          <p>Gunakan username atau email dan kata sandi untuk membuka ruang kerja Anda.</p>
+
+          <label htmlFor="login">Username atau Email</label>
           <input
-            id="email"
+            id="login"
             type="text"
             autoComplete="username"
-            {...register('email')}
-            aria-invalid={!!errors.email}
-            aria-describedby="email-error"
+            placeholder="Masukkan username atau email"
+            {...reg('login')}
+            aria-invalid={!!errors.login}
+            aria-describedby="login-error"
+            disabled={isSubmitting}
           />
-          <span id="email-error" className="field-error" aria-live="polite">
-            {errors.email?.message}
+          <span id="login-error" className="field-error" aria-live="polite">
+            {errors.login?.message}
           </span>
+
           <label htmlFor="password">Kata sandi</label>
-          <input
-            id="password"
-            type="password"
-            autoComplete="current-password"
-            {...register('password')}
-            aria-invalid={!!errors.password}
-            aria-describedby="password-error"
-          />
+          <div className={s.passwordWrapper}>
+            <input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              placeholder="Masukkan kata sandi"
+              {...reg('password')}
+              aria-invalid={!!errors.password}
+              aria-describedby="password-error"
+              disabled={isSubmitting}
+            />
+            <button
+              type="button"
+              className={s.togglePassword}
+              onClick={() => setShowPassword((prev) => !prev)}
+              aria-label={showPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
+              tabIndex={-1}
+            >
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
           <span id="password-error" className="field-error" aria-live="polite">
             {errors.password?.message}
           </span>
-          {import.meta.env.VITE_API_MOCK !== 'true' && (
-            <>
-              <label htmlFor="totp">Kode autentikator (jika diaktifkan)</label>
-              <input
-                id="totp"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={6}
-                {...register('totp')}
-              />
-              <span className="field-error">{errors.totp?.message}</span>
-            </>
-          )}
+
           {error && (
             <p role="alert" className="field-error">
               {error}
             </p>
           )}
+
           <button className="primary" type="submit" disabled={isSubmitting}>
             <LockKeyhole size={16} />
             {isSubmitting ? 'Memeriksa akun…' : 'Masuk ke ruang kerja'}
           </button>
+
+          <p className={s.switchMode}>
+            Belum punya akun?{' '}
+            <Link to="/daftar">Daftar sekarang</Link>
+          </p>
+
           {import.meta.env.VITE_API_MOCK === 'true' && (
             <div className={s.demo}>
               <strong>Akun demonstrasi</strong>
               <br />
-              admin@simris.go.id
+              Username: admin
               <br />
               Kata sandi: Simris123!
               <br />
@@ -131,6 +142,185 @@ export function LoginPage() {
     </div>
   )
 }
+
+/* ─── Register ───────────────────────────────────────────────────────────── */
+
+const registerSchema = z
+  .object({
+    username: z.string().min(3, 'Username minimal 3 karakter.').max(255),
+    email: z.string().min(1, 'Masukkan email.').email('Format email tidak valid.'),
+    password: z.string().min(8, 'Kata sandi minimal 8 karakter.'),
+    password_confirmation: z.string().min(1, 'Konfirmasi kata sandi wajib diisi.'),
+  })
+  .refine((v) => v.password === v.password_confirmation, {
+    path: ['password_confirmation'],
+    message: 'Konfirmasi harus sama dengan kata sandi.',
+  })
+
+export function RegisterPage() {
+  const navigate = useNavigate()
+  const client = useQueryClient()
+  const [error, setError] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
+
+  const {
+    register: reg,
+    handleSubmit,
+    setError: setFieldError,
+    formState: { errors, isSubmitting },
+  } = useForm<z.infer<typeof registerSchema>>({ resolver: zodResolver(registerSchema) })
+
+  return (
+    <div className={s.page}>
+      <section className={s.intro}>
+        <div className={s.brand}>SIMRIS</div>
+        <h1>
+          Mulai kelola risiko.
+          <br />
+          Bersama tim Anda.
+        </h1>
+        <p>Buat akun untuk mengakses ruang kerja manajemen risiko instansi Anda.</p>
+        <div className={s.register}>
+          <span>Daftar cepat</span>
+          <span>Lengkapi profil setelah masuk</span>
+        </div>
+      </section>
+      <main className={s.formSide}>
+        <form
+          className={s.form}
+          onSubmit={handleSubmit(async (values) => {
+            setError('')
+            try {
+              const data = await register(values)
+              if (data?.data) {
+                // session was set by the backend – normalise and hydrate cache
+                client.setQueryData(sessionKey, normalizeSession(data.data))
+              } else {
+                await client.invalidateQueries({ queryKey: sessionKey })
+              }
+              navigate('/', { replace: true })
+            } catch (err) {
+              setError(errorMessage(err))
+              for (const [key, messages] of Object.entries(fieldErrors(err))) {
+                if (['username', 'email', 'password', 'password_confirmation'].includes(key)) {
+                  setFieldError(
+                    key as 'username' | 'email' | 'password' | 'password_confirmation',
+                    { message: messages[0] },
+                  )
+                }
+              }
+            }
+          })}
+          noValidate
+        >
+          <h1>Buat akun SIMRIS</h1>
+          <p>Isi data berikut untuk mendaftarkan akun Anda.</p>
+
+          <label htmlFor="reg-username">Username</label>
+          <input
+            id="reg-username"
+            type="text"
+            autoComplete="username"
+            placeholder="Pilih username unik Anda"
+            {...reg('username')}
+            aria-invalid={!!errors.username}
+            aria-describedby="reg-username-error"
+            disabled={isSubmitting}
+          />
+          <span id="reg-username-error" className="field-error" aria-live="polite">
+            {errors.username?.message}
+          </span>
+
+          <label htmlFor="reg-email">Email</label>
+          <input
+            id="reg-email"
+            type="email"
+            autoComplete="email"
+            placeholder="nama@instansi.go.id"
+            {...reg('email')}
+            aria-invalid={!!errors.email}
+            aria-describedby="reg-email-error"
+            disabled={isSubmitting}
+          />
+          <span id="reg-email-error" className="field-error" aria-live="polite">
+            {errors.email?.message}
+          </span>
+
+          <label htmlFor="reg-password">Kata sandi</label>
+          <div className={s.passwordWrapper}>
+            <input
+              id="reg-password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="new-password"
+              placeholder="Minimal 8 karakter"
+              {...reg('password')}
+              aria-invalid={!!errors.password}
+              aria-describedby="reg-password-error"
+              disabled={isSubmitting}
+            />
+            <button
+              type="button"
+              className={s.togglePassword}
+              onClick={() => setShowPassword((p) => !p)}
+              aria-label={showPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
+              tabIndex={-1}
+            >
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+          <span id="reg-password-error" className="field-error" aria-live="polite">
+            {errors.password?.message}
+          </span>
+
+          <label htmlFor="reg-password-confirmation">Konfirmasi kata sandi</label>
+          <div className={s.passwordWrapper}>
+            <input
+              id="reg-password-confirmation"
+              type={showConfirm ? 'text' : 'password'}
+              autoComplete="new-password"
+              placeholder="Ulangi kata sandi"
+              {...reg('password_confirmation')}
+              aria-invalid={!!errors.password_confirmation}
+              aria-describedby="reg-confirm-error"
+              disabled={isSubmitting}
+            />
+            <button
+              type="button"
+              className={s.togglePassword}
+              onClick={() => setShowConfirm((p) => !p)}
+              aria-label={showConfirm ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
+              tabIndex={-1}
+            >
+              {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+          <span id="reg-confirm-error" className="field-error" aria-live="polite">
+            {errors.password_confirmation?.message}
+          </span>
+
+          {error && (
+            <p role="alert" className="field-error">
+              {error}
+            </p>
+          )}
+
+          <button className="primary" type="submit" disabled={isSubmitting}>
+            <UserPlus size={16} />
+            {isSubmitting ? 'Mendaftarkan akun…' : 'Buat akun'}
+          </button>
+
+          <p className={s.switchMode}>
+            Sudah punya akun?{' '}
+            <Link to="/masuk">Masuk di sini</Link>
+          </p>
+        </form>
+      </main>
+    </div>
+  )
+}
+
+
 const passwordSchema = z
   .object({
     current_password:
@@ -144,6 +334,7 @@ const passwordSchema = z
     path: ['password_confirmation'],
     message: 'Konfirmasi harus sama dengan kata sandi baru.',
   })
+
 export function PasswordPage() {
   const navigate = useNavigate()
   const client = useQueryClient()
@@ -219,6 +410,7 @@ export function PasswordPage() {
     </main>
   )
 }
+
 export function ForbiddenPage() {
   const location = useLocation()
   return (

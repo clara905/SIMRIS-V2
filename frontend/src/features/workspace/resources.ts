@@ -33,6 +33,7 @@ export type Resource = {
   statuses?: string[]
   statusField?: string
   admin?: boolean
+  defaultFilter?: Record<string, unknown>
 }
 const resource = (
   key: string,
@@ -69,7 +70,15 @@ export const modules = [
     icon: Boxes,
     description: 'Aset organisasi dan informasi hasil sinkronisasi sumber aset.',
     resources: [
-      resource('aset', 'Aset', ['kode_aset', 'nama', 'unit_pemilik_id', 'kondisi', 'status']),
+      resource('aset', 'Semua aset', ['kode_aset', 'nama', 'unit_pemilik_id', 'kondisi', 'status_penilaian', 'status']),
+      resource('aset-belum-dinilai', 'Aset belum dinilai', ['kode_aset', 'nama', 'unit_pemilik_id', 'kondisi', 'status_penilaian', 'status'], {
+        endpoint: '/api/aset',
+        defaultFilter: { perlu_ditinjau: true },
+      }),
+      resource('aset-dinilai', 'Aset sudah dinilai', ['kode_aset', 'nama', 'unit_pemilik_id', 'kondisi', 'status_penilaian', 'status'], {
+        endpoint: '/api/aset',
+        defaultFilter: { perlu_ditinjau: false },
+      }),
     ],
   },
   {
@@ -223,6 +232,8 @@ export const labels: Record<string, string> = {
   ukuran_byte: 'Ukuran (byte)',
   status_pemeriksaan: 'Pemeriksaan',
   dibekukan: 'Metode beku',
+  status_penilaian: 'Status penilaian',
+  perlu_ditinjau: 'Perlu ditinjau',
   pic_id: 'ID penanggung jawab',
 }
 export function label(field: string) {

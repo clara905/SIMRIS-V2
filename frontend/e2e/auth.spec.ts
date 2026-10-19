@@ -7,6 +7,7 @@ test('masuk, keluar, serta pembatasan akses', async ({ page }) => {
   await page.getByRole('button', { name: 'Masuk ke ruang kerja' }).click()
   await expect(page.getByRole('navigation', { name: 'Navigasi utama' })).toBeVisible()
   await page.getByRole('button', { name: 'Keluar', exact: true }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Ya, keluar' }).click()
   await expect(page).toHaveURL(/masuk/)
 })
 test('ganti password wajib', async ({ page }) => {
@@ -20,6 +21,7 @@ test('ganti password wajib', async ({ page }) => {
   await page.getByRole('button', { name: 'Simpan kata sandi' }).click()
   await expect(page.getByRole('navigation', { name: 'Navigasi utama' })).toBeVisible()
   await page.getByRole('button', { name: 'Keluar', exact: true }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Ya, keluar' }).click()
   await page.getByLabel('Email', { exact: true }).fill('baru@simris.go.id')
   await page.getByLabel('Kata sandi', { exact: true }).fill('KataSandiBaru123!')
   await page.getByRole('button', { name: 'Masuk ke ruang kerja' }).click()
