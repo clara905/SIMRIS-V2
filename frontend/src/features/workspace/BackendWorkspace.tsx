@@ -26,6 +26,8 @@ import {
   Edit3,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { KelolaPage } from '../satker/KelolaPage'
+import { SatkerBeranda } from '../satker/SatkerBeranda'
 import { api, errorMessage } from '../../api/client'
 import { logout, updateProfile, useSession, sessionKey } from '../../api/auth'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
@@ -112,8 +114,12 @@ export function BackendWorkspace() {
   const [leaving, setLeaving] = useState(false)
   const [logoutConfirm, setLogoutConfirm] = useState(false)
   const [navSearch, setNavSearch] = useState('')
+  const roleCodes = session.data?.roleCodes ?? []
+  const isSatkerAdmin = roleCodes.includes('ADMIN_SATKER') && !roleCodes.includes('SUPER_ADMIN')
   const allowed = modules.filter(
-    (m) => !m.admin || session.data?.roleCodes?.includes('SUPER_ADMIN'),
+    (m) =>
+      (!m.admin || roleCodes.includes('SUPER_ADMIN')) &&
+      (!m.roles || m.roles.some((r) => roleCodes.includes(r))),
   )
   const active = allowed.find((m) => m.path === location.pathname)
   const navigation = (
@@ -233,7 +239,9 @@ export function BackendWorkspace() {
               <Link to="/">Kembali ke ringkasan</Link>
             </section>
           ) : active.path === '/' ? (
-            <Overview />
+            isSatkerAdmin ? <SatkerBeranda /> : <Overview />
+          ) : active.path.startsWith('/kelola/') ? (
+            <KelolaPage item={active} />
           ) : (
             <>
               <div className="ws-page-heading">
