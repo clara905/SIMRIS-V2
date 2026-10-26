@@ -1,0 +1,32 @@
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0;
+  flex-wrap: wrap;
+}
+.search {
+  position: relative;
+  flex: 1;
+  min-width: 220px;
+  max-width: 400px;
+}
+.search svg {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  color: var(--teks-kedua);
+}
+.search input {
+  padding-left: 38px;
+}
+.bar select {
+  width: auto;
+  max-width: 220px;
+}
+.bar label {
+  margin: 0;
+}
+.spacer {
+  flex: 1;
+}

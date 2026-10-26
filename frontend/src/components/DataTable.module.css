@@ -1,0 +1,103 @@
+.wrap {
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--lembar);
+  border: 1px solid var(--garis);
+}
+.scroll {
+  overflow: auto;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  white-space: nowrap;
+  text-align: left;
+}
+.table caption {
+  text-align: left;
+  padding: 16px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--garis);
+}
+.table th {
+  background: var(--kertas);
+  letter-spacing: 0.2px;
+  color: var(--teks-kedua);
+  font-size: 12px;
+  font-weight: 500;
+  border-bottom: 1px solid var(--garis);
+  padding: 11px 16px;
+}
+.table td {
+  padding: 15px 16px;
+  border-bottom: 1px solid var(--garis);
+  font-size: 13px;
+}
+.table tr:last-child td {
+  border-bottom: 0;
+}
+.table tbody tr:hover td,
+.table tbody tr:focus-within td {
+  background: var(--aksen-lembut);
+}
+.table td:first-child,
+.table th:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--lembar);
+  z-index: 1;
+}
+.table th:first-child {
+  background: var(--kertas);
+}
+.table button {
+  min-height: 28px;
+}
+.compact td {
+  padding: 7px 16px;
+  font-family: var(--font-padat);
+  font-size: 14px;
+}
+.numeric {
+  text-align: right;
+}
+.pagination {
+  background: var(--kertas);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--garis);
+  color: var(--teks-kedua);
+  font-size: 12px;
+}
+.pagination select {
+  width: auto;
+  padding: 4px 8px;
+  font-size: 12px;
+  min-height: 32px;
+}
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.controls button {
+  min-height: 30px;
+  padding: 4px 8px;
+}
+.sort {
+  padding: 0;
+  min-height: 24px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+}
+
+.saved td {
+  background: var(--biru-cap-tint);
+  transition: background 180ms ease;
+}

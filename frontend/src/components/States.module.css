@@ -1,0 +1,30 @@
+.state {
+  background: var(--lembar);
+  border: 1px solid var(--garis);
+  padding: 40px 24px;
+  text-align: center;
+}
+.state svg {
+  color: var(--teks-kedua);
+}
+.state h2 {
+  margin: 16px 0 8px;
+}
+.state p {
+  margin: 8px auto 20px;
+  color: var(--teks-kedua);
+}
+.skeleton {
+  padding: 20px;
+  background: var(--lembar);
+  border: 1px solid var(--garis);
+}
+.skeleton div {
+  height: 24px;
+  background: var(--kertas);
+  margin: 12px 0;
+  border-radius: var(--radius-sel);
+}
+.skeleton div:first-child {
+  width: 40%;
+}

@@ -1,0 +1,52 @@
+import { test, expect } from '@playwright/test'
+import { demoSession } from './helpers'
+test.beforeEach(async ({ page }) => {
+  await demoSession(page)
+})
+test('membuat pengguna dan role scope, memvalidasi email duplikat', async ({ page }) => {
+  await page.goto('/pengguna')
+  await page.getByRole('button', { name: 'Tambah pengguna', exact: true }).click()
+  await page.getByLabel('Nama lengkap').fill('Pengguna Pengujian')
+  await page.getByLabel('Email', { exact: true }).fill('pengujian@instansi.go.id')
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Tambah pengguna', exact: true })
+    .click()
+  await expect(page.getByRole('heading', { name: 'Pengguna Pengujian' })).toBeVisible()
+  await page.getByRole('button', { name: 'Tambah role scope', exact: true }).click()
+  await page.getByLabel('Role', { exact: true }).selectOption('Operator')
+  await page.getByLabel('Cakupan unit').selectOption('2')
+  await page.getByRole('button', { name: 'Tambah role scope', exact: true }).click()
+  await expect(page.getByRole('dialog').getByText('Operator', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Ubah role scope', exact: true }).click()
+  await page.getByLabel('Role', { exact: true }).selectOption('Auditor')
+  await page.getByRole('button', { name: 'Simpan role scope', exact: true }).click()
+  await expect(page.getByRole('dialog').getByText('Auditor', { exact: true })).toBeVisible()
+  await expect(page.getByRole('dialog').getByText('Operator', { exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Tutup rincian' }).click()
+  await page.getByRole('button', { name: 'Aditya Pratama', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Nonaktifkan pengguna' })).toBeDisabled()
+  await expect(page.getByText('Akun sendiri tidak dapat dinonaktifkan.')).toBeVisible()
+})
+test('unit beranak tidak bisa dinonaktifkan dan induk dapat dipilih', async ({ page }) => {
+  await page.goto('/unit')
+  await expect(page.getByRole('button', { name: 'Nonaktifkan unit' })).toBeDisabled()
+  await expect(page.getByText(/Unit memiliki 3 anak/)).toBeVisible()
+  await page.getByRole('button', { name: 'Pindah induk' }).click()
+  await expect(page.getByRole('navigation', { name: 'Pilih induk baru' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Bidang perencanaan', exact: true }).first().click()
+  await page.getByRole('link', { name: 'Lihat perubahan unit di log audit' }).click()
+  await expect(page.getByRole('button', { name: 'Bidang perencanaan', exact: true })).toBeVisible()
+})
+test('penempatan baru tersimpan dengan jalur organisasi', async ({ page }) => {
+  await page.goto('/pegawai?filter=tanpa-penempatan')
+  await page.getByRole('button', { name: 'Rizky Hidayat', exact: true }).click()
+  await page.getByRole('button', { name: 'Tambah penempatan', exact: true }).click()
+  await page.getByLabel('Unit penempatan').selectOption('4')
+  await page.getByLabel('Jabatan', { exact: true }).fill('Analis sistem')
+  await page.getByRole('button', { name: 'Simpan penempatan' }).click()
+  await expect(
+    page.getByText('Sekretariat utama / Bidang teknologi informasi / Subbidang infrastruktur'),
+  ).toBeVisible()
+})

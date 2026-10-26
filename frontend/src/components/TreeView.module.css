@@ -1,0 +1,36 @@
+.tree {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tree ul {
+  list-style: none;
+  padding-left: 20px;
+  border-left: 1px solid var(--garis);
+  margin-left: 14px;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 4px 0;
+}
+.row > button:last-child {
+  flex: 1;
+  justify-content: flex-start;
+  border: 0;
+  background: transparent;
+  padding: 10px 8px;
+  text-align: left;
+}
+.row > button[aria-current='true'] {
+  background: var(--biru-cap-tint);
+  color: var(--biru-cap);
+}
+.leaf {
+  width: 36px;
+  flex-shrink: 0;
+}
+.row svg {
+  flex-shrink: 0;
+}

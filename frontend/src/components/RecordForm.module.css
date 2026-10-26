@@ -1,0 +1,15 @@
+.actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--garis);
+}
+.hint,
+.optional {
+  font-size: 12px;
+  color: var(--teks-kedua);
+  font-weight: 400;
+  margin-top: 4px;
+}

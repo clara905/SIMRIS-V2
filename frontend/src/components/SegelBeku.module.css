@@ -1,0 +1,32 @@
+.seal {
+  border: 3px double var(--biru-cap);
+  color: var(--biru-cap);
+  padding: 9px 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  transform: rotate(-5deg);
+  text-align: center;
+  background: var(--lembar);
+}
+.seal strong {
+  display: block;
+  font-size: 18px;
+}
+.seal small {
+  display: block;
+  font-size: 11px;
+}
+.animated {
+  animation: stamp 300ms ease-out;
+}
+@keyframes stamp {
+  from {
+    transform: rotate(-5deg) scale(1.25);
+    opacity: 0.2;
+  }
+  to {
+    transform: rotate(-5deg) scale(1);
+    opacity: 1;
+  }
+}

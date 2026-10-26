@@ -1,0 +1,264 @@
+.page {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--lembar);
+}
+.intro {
+  --kertas: #621422;
+  --tinta: #ffffff;
+  --teks-kedua: #f0cdd4;
+  --biru-cap: #ffe0e6;
+  color: var(--tinta);
+  position: relative;
+  overflow: hidden;
+  padding: 64px clamp(32px, 6vw, 100px);
+  background:
+    radial-gradient(circle at 30% 45%, rgba(212, 175, 55, 0.18) 0%, transparent 45%),
+    radial-gradient(ellipse at 25% 80%, rgba(174, 53, 72, 0.45) 0%, transparent 60%),
+    linear-gradient(135deg, #440c16 0%, #621422 45%, #7e1d2f 100%);
+  border-right: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.intro::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: clamp(-40px, 4vw, 40px);
+  transform: translateY(-50%);
+  width: min(560px, 85vw);
+  height: min(560px, 85vw);
+  background-image: url('/logo-kemhan.png');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  opacity: 0.16;
+  pointer-events: none;
+  filter: drop-shadow(0 0 50px rgba(0, 0, 0, 0.45));
+  mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
+  -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
+}
+.intro > * {
+  position: relative;
+  z-index: 1;
+}
+.brand {
+  display: block;
+  color: #ffffff;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  line-height: 1;
+  margin-bottom: 64px;
+}
+.intro h1 {
+  font-size: 48px;
+  line-height: 1.12;
+  max-width: 440px;
+  margin-bottom: 24px;
+}
+.intro p {
+  color: var(--teks-kedua);
+  max-width: 44ch;
+  font-size: 16px;
+}
+.register {
+  margin-top: 48px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  padding-top: 16px;
+  display: flex;
+  gap: 24px;
+  font-size: 13px;
+  color: var(--teks-kedua);
+}
+.formSide {
+  display: grid;
+  place-items: center;
+  padding: 48px 32px;
+}
+.form {
+  width: 100%;
+  max-width: 380px;
+}
+.form h1 {
+  font-size: 36px;
+  margin: 0 0 12px;
+}
+.form > p {
+  color: var(--teks-kedua);
+  margin-bottom: 32px;
+}
+.form button[type='submit'] {
+  width: 100%;
+  margin-top: 12px;
+}
+.googleBtn {
+  width: 100%;
+  background: #ffffff;
+  color: #3c4043;
+  border: 1px solid #dadce0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-weight: 500;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.googleBtn:hover:not(:disabled) {
+  background: #f8f9fa;
+  border-color: #c6c9ce;
+  color: #202124;
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.2);
+}
+.divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 20px 0;
+  color: var(--teks-kedua);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--garis);
+}
+.divider span {
+  padding: 0 14px;
+}
+.passwordWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.captchaContainer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.captchaCanvas {
+  background: #f1f3f5;
+  border: 1px solid var(--garis);
+  border-radius: var(--radius-kontrol);
+  height: 42px;
+  width: 140px;
+  cursor: pointer;
+  user-select: none;
+}
+.reloadCaptchaBtn {
+  background: var(--lembar);
+  border: 1px solid var(--garis);
+  color: var(--teks-kedua);
+  min-height: 42px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: var(--radius-kontrol);
+}
+.reloadCaptchaBtn:hover:not(:disabled) {
+  color: var(--tinta);
+  border-color: var(--biru-cap);
+}
+
+.passwordWrapper input {
+  width: 100%;
+  padding-right: 42px;
+}
+.togglePassword {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  min-height: unset;
+  padding: 6px;
+  color: var(--teks-kedua);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.togglePassword:hover:not(:disabled) {
+  color: var(--tinta);
+  background: transparent;
+}
+.switchMethod {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--teks-kedua);
+}
+.switchMethod a {
+  font-weight: 500;
+  color: var(--biru-cap);
+  text-decoration: none;
+}
+.switchMethod a:hover {
+  text-decoration: underline;
+}
+.switchMode {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--teks-kedua);
+}
+.switchMode a {
+  font-weight: 500;
+  color: var(--biru-cap);
+  text-decoration: none;
+}
+.switchMode a:hover {
+  text-decoration: underline;
+}
+.demo {
+  border-top: 1px solid var(--garis);
+  padding-top: 20px;
+  margin-top: 32px;
+  font-size: 12px;
+  color: var(--teks-kedua);
+}
+
+@media (max-width: 767px) {
+  .page {
+    display: block;
+  }
+  .intro {
+    padding: 28px 24px;
+    border-right: 0;
+    border-bottom: 1px solid var(--garis);
+  }
+  .intro::before {
+    left: -10px;
+    right: auto;
+    width: 220px;
+    height: 220px;
+    opacity: 0.12;
+  }
+  .brand {
+    margin-bottom: 24px;
+    font-size: 20px;
+    letter-spacing: 2.5px;
+  }
+  .intro h1 {
+    font-size: 28px;
+  }
+  .intro p,
+  .register {
+    display: none;
+  }
+  .formSide {
+    padding: 32px 24px;
+  }
+}

@@ -1,0 +1,18 @@
+.badge {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 3px 7px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--garis);
+  border-radius: var(--radius-sel);
+  color: var(--teks-kedua);
+  background: var(--lembar);
+  white-space: nowrap;
+}
+.marked {
+  color: var(--biru-cap);
+  background: var(--biru-cap-tint);
+  border-color: var(--biru-cap-tint);
+}
