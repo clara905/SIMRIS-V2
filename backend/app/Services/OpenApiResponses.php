@@ -31,7 +31,7 @@ class OpenApiResponses extends ResponseExtension
             $type->addProperty($name, $property);
         }
 
-return $type->setRequired($required);
+        return $type->setRequired($required);
     }
 
     private function list(Type $item): ArrayType
@@ -239,7 +239,7 @@ return $type->setRequired($required);
         $payload = in_array($method, ['index', 'history', 'reviews'], true) ? $this->page($row) : $this->object(['data' => $row], ['data']);
         $this->add($operation, $status, $payload, 'Data berhasil diproses.');
         if ($controller === 'AsesmenController' && $method === 'store' && in_array($resource, ['penilaian', 'usulan-keputusan'], true)) {
-            $this->add($operation,200,$payload,'Penilaian/usulan draft yang sudah ada diperbarui.');
+            $this->add($operation, 200, $payload, 'Penilaian/usulan draft yang sudah ada diperbarui.');
         }
     }
 
@@ -251,6 +251,6 @@ return $type->setRequired($required);
             $properties[$kind] = (new StringType)->nullable(true);
         }
 
-return $this->object($properties);
+        return $this->object($properties);
     }
 }

@@ -2,10 +2,10 @@
 
 namespace App\Policies;
 
-use App\Models\Role;
-use App\Models\UnitOrganisasi;
 use App\Models\Pegawai;
 use App\Models\PenempatanPegawai;
+use App\Models\Role;
+use App\Models\UnitOrganisasi;
 use App\Models\User;
 use App\Models\UserRoleScope;
 use App\Services\ScopeUnit;

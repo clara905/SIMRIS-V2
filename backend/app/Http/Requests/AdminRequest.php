@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Services\AdminService;
+use App\Services\ScopeUnit;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 
@@ -45,7 +46,7 @@ class AdminRequest extends ApiRequest
         $id = $this->route('id');
         $unique = fn (string $table, string $column) => Rule::unique($table, $column)->ignore($id);
         $actor = $this->user();
-        $satkerAdmin = $actor !== null && app(\App\Services\ScopeUnit::class)->hasRole($actor, ['ADMIN_SATKER']) && ! app(\App\Services\ScopeUnit::class)->isSuper($actor);
+        $satkerAdmin = $actor !== null && app(ScopeUnit::class)->hasRole($actor, ['ADMIN_SATKER']) && ! app(ScopeUnit::class)->isSuper($actor);
 
         return match ($resource) {
             'users' => ['pegawai_id' => [$satkerAdmin && $this->isMethod('POST') ? 'required' : 'sometimes', 'nullable', 'integer', Rule::exists('PEGAWAI', 'id'), $unique('USERS', 'pegawai_id')], 'username' => [$required, 'string', 'max:255', 'regex:/^[A-Za-z0-9._-]+$/', $unique('USERS', 'username')], 'email_login' => [$required, 'email', 'max:255', $unique('USERS', 'email_login')], 'password' => $this->isMethod('POST') ? ['required', 'string', 'min:12', 'max:255', 'confirmed'] : ['prohibited'], 'aktif' => ['sometimes', 'boolean'], 'wajib_ganti_password' => ['prohibited'], 'password_hash' => ['prohibited']],
