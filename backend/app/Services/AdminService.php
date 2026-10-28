@@ -124,8 +124,25 @@ class AdminService
                 if ($resource === 'pegawai' && ! $this->scope->isSuper($actor) && $id && ! $this->pegawaiInSatkerScope((int) $model->id, $actor)) {
                     throw new BusinessRuleException('pegawai_di_luar_scope', 'Pegawai harus memiliki penempatan aktif di wilayah Admin Satker.');
                 }
-                if ($resource === 'penempatan-pegawai' && ! $this->scope->isSuper($actor) && isset($data['unit_id']) && ! in_array((int) $data['unit_id'], $this->scope->idsForRoles($actor, ['ADMIN_SATKER']), true)) {
-                    throw new BusinessRuleException('unit_di_luar_scope', 'Penempatan hanya boleh berada di wilayah Admin Satker.');
+                if ($resource === 'penempatan-pegawai' && ! $this->scope->isSuper($actor)) {
+                    $satkerUnits = $this->scope->idsForRoles($actor, ['ADMIN_SATKER']);
+                    $targetUnitId = isset($data['unit_id']) ? (int) $data['unit_id'] : ($model->exists ? (int) $model->unit_id : null);
+                    if ($targetUnitId === null || ! in_array($targetUnitId, $satkerUnits, true)) {
+                        throw new BusinessRuleException('unit_di_luar_scope', 'Penempatan hanya boleh berada di wilayah Admin Satker.');
+                    }
+                    if ($model->exists && ! in_array((int) $model->unit_id, $satkerUnits, true)) {
+                        throw new BusinessRuleException('unit_di_luar_scope', 'Penempatan yang diubah harus berada di wilayah Admin Satker.');
+                    }
+                    $targetPegawaiId = (int) ($data['pegawai_id'] ?? $model->pegawai_id);
+                    $activePlacementOutside = DB::table('PENEMPATAN_PEGAWAI')
+                        ->where('pegawai_id', $targetPegawaiId)
+                        ->whereNotIn('unit_id', $satkerUnits)
+                        ->where('mulai', '<=', today())
+                        ->where(fn ($q) => $q->whereNull('selesai')->orWhere('selesai', '>=', today()))
+                        ->exists();
+                    if ($activePlacementOutside) {
+                        throw new BusinessRuleException('mutasi_lintas_satker_dilarang', 'Mutasi pegawai antar satker hanya dapat dikerjakan oleh Super Admin.');
+                    }
                 }
                 if ($resource === 'periode-penilaian') {
                     $values = [...$before, ...$data];
@@ -140,23 +157,6 @@ class AdminService
                 } else {
                     $model->fill($data)->save();
                 }
-                if ($resource === 'unit-organisasi' && ! $id && $model->jenis === 'SATKER' && ! $this->scope->isSuper($actor)) {
-                    $adminSatkerRole = Role::where('kode', 'ADMIN_SATKER')->firstOrFail();
-                    $scope = UserRoleScope::create([
-                        'user_id' => $actor->id,
-                        'role_id' => $adminSatkerRole->id,
-                        'unit_id' => $model->id,
-                        'mulai' => now(),
-                        'selesai' => null,
-                    ]);
-                    $this->audit->record(
-                        $scope->getTable(),
-                        (int) $scope->id,
-                        'ROLE_CHANGE',
-                        null,
-                        [...$scope->getAttributes(), 'oleh_admin_satker' => true, 'role' => 'ADMIN_SATKER'],
-                    );
-                }
                 if (in_array($resource, ['users', 'user-role-scope'], true)) {
                     $this->assertSuperAdminRemains();
                 }
@@ -165,6 +165,9 @@ class AdminService
                     if (! $this->scope->isSuper($actor)) {
                         $roleCode = $action === 'delete' ? Role::find($before['role_id'])?->kode : Role::find($model->role_id)?->kode;
                         $marker = ['oleh_admin_satker' => true, 'role' => $roleCode];
+                        if ($roleCode === 'KASATKER') {
+                            $marker['perubahan_kasatker'] = true;
+                        }
                         $before = [...$before, ...$marker];
                         $after = $after === null ? null : [...$after, ...$marker];
                     }
@@ -212,6 +215,12 @@ class AdminService
         if (($role->kode === 'SUPER_ADMIN') !== ($unit === null)) {
             throw new BusinessRuleException('scope_unit_tidak_valid', 'Hanya SUPER_ADMIN yang wajib menggunakan scope global; role lain wajib memiliki unit.');
         }
+        if ($role->kode === 'ADMIN_SATKER') {
+            $targetUnit = $unit ? UnitOrganisasi::find($unit) : null;
+            if (! $targetUnit || $targetUnit->jenis !== 'SATKER' || $targetUnit->parent_id !== null) {
+                throw new BusinessRuleException('admin_satker_harus_satker_akar', 'Role ADMIN_SATKER wajib dipasang pada unit berjenis SATKER tingkat akar.');
+            }
+        }
         $start = Carbon::parse($values['mulai'])->setTimezone('Asia/Jakarta');
         $end = isset($values['selesai']) ? Carbon::parse($values['selesai'])->setTimezone('Asia/Jakarta') : null;
         if ($end && $end->lt($start)) {
@@ -226,6 +235,27 @@ class AdminService
             $overlap = UserRoleScope::where('user_id', $values['user_id'])->where('role_id', $role->id)->where('unit_id', $unit)->when($record->exists, fn ($q) => $q->where('id', '!=', $record->id))->where(fn ($q) => $q->whereNull('selesai')->orWhere('selesai', '>=', $start))->when($end, fn ($q) => $q->where('mulai', '<=', $end))->exists();
             if ($overlap) {
                 throw new BusinessRuleException('scope_tumpang_tindih', 'Rentang scope dengan role dan unit yang sama bertumpang tindih.');
+            }
+            if ($role->kode === 'ADMIN_SATKER') {
+                $satkerAdminOverlap = UserRoleScope::where('role_id', $role->id)
+                    ->where('unit_id', $unit)
+                    ->when($record->exists, fn ($q) => $q->where('id', '!=', $record->id))
+                    ->where(fn ($q) => $q->whereNull('selesai')->orWhere('selesai', '>=', $start))
+                    ->when($end, fn ($q) => $q->where('mulai', '<=', $end))
+                    ->exists();
+                if ($satkerAdminOverlap) {
+                    throw new BusinessRuleException('admin_satker_ganda', 'Satker sudah memiliki Admin Satker aktif.');
+                }
+                $accountOtherSatkerOverlap = UserRoleScope::where('user_id', $values['user_id'])
+                    ->where('role_id', $role->id)
+                    ->where('unit_id', '!=', $unit)
+                    ->when($record->exists, fn ($q) => $q->where('id', '!=', $record->id))
+                    ->where(fn ($q) => $q->whereNull('selesai')->orWhere('selesai', '>=', $start))
+                    ->when($end, fn ($q) => $q->where('mulai', '<=', $end))
+                    ->exists();
+                if ($accountOtherSatkerOverlap) {
+                    throw new BusinessRuleException('admin_satker_satu_satker', 'Satu akun hanya boleh memegang role ADMIN_SATKER aktif pada satu satker.');
+                }
             }
         }
         if (array_key_exists('mulai', $data)) {
@@ -259,19 +289,24 @@ class AdminService
     private function assertSatkerUnit(Model $model, array $data, string $action, User $actor): void
     {
         $units = $this->scope->idsForRoles($actor, ['ADMIN_SATKER']);
-        if ($model->exists && ! in_array((int) $model->id, $units, true)) {
-            throw new BusinessRuleException('unit_di_luar_scope', 'Unit berada di luar wilayah Admin Satker.');
+        if ($model->exists) {
+            if (! in_array((int) $model->id, $units, true)) {
+                throw new BusinessRuleException('unit_di_luar_scope', 'Unit berada di luar wilayah Admin Satker.');
+            }
+            if ($model->parent_id === null || $model->jenis === 'SATKER') {
+                throw new BusinessRuleException('unit_satker_dilindungi', 'Unit SATKER akar tidak dapat diubah atau dinonaktifkan oleh Admin Satker.');
+            }
+        }
+        if (! $model->exists) {
+            $jenis = $data['jenis'] ?? null;
+            if ($jenis === 'SATKER') {
+                throw new BusinessRuleException('induk_di_luar_scope', 'Admin Satker tidak boleh membuat unit berjenis SATKER.');
+            }
         }
         $parentWasChanged = array_key_exists('parent_id', $data) || ! $model->exists;
         $parentId = $data['parent_id'] ?? ($model->exists ? $model->parent_id : null);
-        $creatingSatkerRoot = ! $model->exists && $action === 'create' && ($data['jenis'] ?? null) === 'SATKER' && $parentId === null;
-        if ($parentWasChanged && ! $creatingSatkerRoot && ($parentId === null || ! in_array((int) $parentId, $units, true))) {
+        if ($parentWasChanged && ($parentId === null || ! in_array((int) $parentId, $units, true))) {
             throw new BusinessRuleException('induk_di_luar_scope', 'Unit baru atau perpindahan unit harus memiliki induk di wilayah Admin Satker.');
-        }
-        $active = $data['aktif'] ?? ($action === 'nonaktifkan' ? false : true);
-        $adminRoots = DB::table('USER_ROLE_SCOPE as s')->join('ROLES as r', 'r.id', '=', 's.role_id')->where('s.user_id', $actor->id)->where('r.kode', 'ADMIN_SATKER')->whereNotNull('s.unit_id')->where('s.mulai', '<=', now())->where(fn ($q) => $q->whereNull('s.selesai')->orWhere('s.selesai', '>=', now()))->pluck('s.unit_id')->map(fn ($id) => (int) $id)->all();
-        if ($model->exists && ! $active && ($model->parent_id === null || in_array((int) $model->id, $adminRoots, true))) {
-            throw new BusinessRuleException('unit_induk_tidak_dapat_dinonaktifkan', 'Unit induk wilayah Admin Satker tidak dapat dinonaktifkan oleh ADMIN_SATKER.');
         }
     }
 

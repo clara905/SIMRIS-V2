@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query'
 import { api } from '../../api/client'
 
 export type Row = Record<string, unknown> & { id: number }
@@ -55,3 +56,26 @@ export const byPegawai = (row: Row) =>
 
 /** Tanggal dari API bisa "2026-10-22" atau ISO; input tanggal HTML butuh YYYY-MM-DD. */
 export const dateOnly = (value: unknown) => text(value).slice(0, 10)
+
+/** Mengambil data unit SATKER akar admin satker yang sedang login. */
+export function useSatkerUnit() {
+  return useQuery({
+    queryKey: ['satker', 'unit-organisasi-utama'],
+    queryFn: async ({ signal }) => {
+      const response = await getPage(
+        '/api/unit-organisasi',
+        { 'filter[jenis]': 'SATKER', per_page: 10 },
+        signal,
+      )
+      if (!response.data.length) return null
+      if (response.data.length > 1) {
+        console.warn(
+          'Anomali: Ditemukan lebih dari satu unit berjenis SATKER untuk admin satker:',
+          response.data,
+        )
+      }
+      return response.data[0]
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+}

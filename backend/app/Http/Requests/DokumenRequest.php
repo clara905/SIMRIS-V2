@@ -46,7 +46,7 @@ class DokumenRequest extends ApiRequest
             return ['dokumen_versi_id' => ['required', 'integer'], 'file' => ['required', 'file', 'max:'.config('lampiran.max_kb')], 'keterangan' => ['sometimes', 'string', 'max:255'], 'urutan' => ['sometimes', 'integer', 'min:1']];
         }
         if ($this->route('resource') === 'dokumen') {
-            return ['unit_pemilik_id' => ['required', 'integer'], 'kode' => ['required', 'string', 'max:255', Rule::unique('DOKUMEN', 'kode')], 'judul' => ['required', 'string', 'max:255'], 'jenis' => ['required', Rule::in(['SOP', 'BUKTI', 'LAPORAN', 'PENDUKUNG'])]];
+            return ['unit_pemilik_id' => ['required', 'integer'], 'kode' => ['required', 'string', 'max:255', Rule::unique('DOKUMEN', 'kode')->where('unit_pemilik_id', $this->input('unit_pemilik_id'))], 'judul' => ['required', 'string', 'max:255'], 'jenis' => ['required', Rule::in(['SOP', 'BUKTI', 'LAPORAN', 'PENDUKUNG'])]];
         }
 
         return ['isi_teks' => ['sometimes', 'nullable', 'string', 'max:1000000'], 'format_teks' => [$this->isMethod('POST') ? 'required' : 'sometimes', Rule::in(['PLAIN', 'MARKDOWN', 'RICH_TEXT_JSON'])], 'status' => ['prohibited'], 'dokumen_id' => ['prohibited'], 'nomor_versi' => ['prohibited'], 'dibekukan_pada' => ['prohibited'], 'dibuat_oleh' => ['prohibited']];

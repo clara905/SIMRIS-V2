@@ -28,6 +28,7 @@ import {
 import { toast } from 'sonner'
 import { KelolaPage } from '../satker/KelolaPage'
 import { SatkerBeranda } from '../satker/SatkerBeranda'
+import { useSatkerUnit } from '../satker/api'
 import { isAssetPendingAssessment } from '../aset/assessment'
 import { api, errorMessage } from '../../api/client'
 import { logout, updateProfile, useSession, sessionKey } from '../../api/auth'
@@ -117,6 +118,7 @@ export function BackendWorkspace() {
   const [navSearch, setNavSearch] = useState('')
   const roleCodes = session.data?.roleCodes ?? []
   const isSatkerAdmin = roleCodes.includes('ADMIN_SATKER') && !roleCodes.includes('SUPER_ADMIN')
+  const satkerUnit = useSatkerUnit()
   const allowed = modules.filter(
     (m) =>
       !(isSatkerAdmin && ['Referensi', 'Organisasi'].includes(m.group)) &&
@@ -203,6 +205,14 @@ export function BackendWorkspace() {
             <Link to="/" className="ws-breadcrumb-home">
               Ruang kerja
             </Link>
+            {isSatkerAdmin && satkerUnit.data && (
+              <>
+                <ChevronRight size={14} aria-hidden="true" />
+                <span className="ws-breadcrumb-satker" style={{ fontWeight: 600, color: 'var(--ws-text-muted, #64748b)' }}>
+                  {String(satkerUnit.data.nama || satkerUnit.data.kode)}
+                </span>
+              </>
+            )}
             <ChevronRight size={14} aria-hidden="true" />
             {location.pathname === '/profil' ? (
               <strong>Profil</strong>

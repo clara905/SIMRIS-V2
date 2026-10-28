@@ -39,7 +39,13 @@ function KontrolInternal() {
   const refresh = () => { void client.invalidateQueries({ queryKey: ['satker', 'kepatuhan'] }) }
   const save = useMutation({ mutationFn: async () => { const body = { kode: form.kode.trim(), nama: form.nama.trim(), jenis: form.jenis, deskripsi: form.deskripsi.trim(), aktif: form.aktif }; if (editing) await api.patch('/api/kontrol-internal/' + editing.id, body); else await api.post('/api/kontrol-internal', { ...body, unit_pemilik_id: Number(form.unit_pemilik_id) }) }, onSuccess: () => { toast.success(editing ? 'Kontrol internal diperbarui.' : 'Kontrol internal dibuat.'); setEditing(null); setCreating(false); setErrors({}); refresh() }, onError: (error) => { setErrors(fieldErrors(error)); toast.error(errorMessage(error)) } })
   const remove = useMutation({ mutationFn: async () => { if (removing) await api.delete('/api/kontrol-internal/' + removing.id) }, onSuccess: () => { toast.success('Kontrol internal dihapus.'); setRemoving(null); refresh() }, onError: (error) => toast.error(errorMessage(error)) })
-  const openNew = () => { setEditing(null); setCreating(true); setErrors({}); setForm(blankControl) }
+  const openNew = () => {
+    setEditing(null)
+    setCreating(true)
+    setErrors({})
+    const defaultUnitId = units.data?.length === 1 ? String(units.data[0].id) : ''
+    setForm({ ...blankControl, unit_pemilik_id: defaultUnitId })
+  }
   const openEdit = (row: Row) => { setEditing(row); setCreating(false); setErrors({}); setForm({ unit_pemilik_id: str(row.unit_pemilik_id), kode: str(row.kode), nama: str(row.nama), jenis: str(row.jenis), deskripsi: str(row.deskripsi), aktif: row.aktif === true || row.aktif === 1 }) }
   const submit = (event: FormEvent) => { event.preventDefault(); const next: Record<string, string[]> = {}; for (const key of ['kode', 'nama', 'jenis'] as const) if (!form[key].trim()) next[key] = ['Kolom wajib diisi.']; if (!form.deskripsi.trim()) next.deskripsi = ['Deskripsi wajib diisi.']; if (creating && !form.unit_pemilik_id) next.unit_pemilik_id = ['Pilih unit.']; if (Object.keys(next).length) { setErrors(next); return } setErrors({}); save.mutate() }
   return <section className="ws-panel"><div className="ws-register-tools"><strong>Daftar kontrol internal</strong><button className="primary" onClick={openNew}><Plus size={16} /> Tambah kontrol</button><button className="ws-refresh" aria-label="Perbarui kontrol internal" disabled={list.isFetching} onClick={() => void list.refetch()}><RefreshCw size={16} /></button></div>
@@ -80,7 +86,13 @@ function SopManagement() {
   const save = useMutation({ mutationFn: async () => { if (editing) await api.patch('/api/sop/' + editing.id, { kode: form.kode.trim(), judul: form.judul.trim() }); else await api.post('/api/sop', { ...form, unit_pemilik_id: Number(form.unit_pemilik_id), kode: form.kode.trim(), judul: form.judul.trim() }) }, onSuccess: () => { toast.success(editing ? 'SOP diperbarui.' : 'SOP dibuat.'); setEditing(null); setCreating(false); setErrors({}); void client.invalidateQueries({ queryKey: ['satker', 'kepatuhan'] }) }, onError: (error) => { setErrors(fieldErrors(error)); toast.error(errorMessage(error)) } })
   const remove = useMutation({ mutationFn: async () => { if (removing) await api.delete('/api/sop/' + removing.id) }, onSuccess: () => { toast.success('SOP dihapus.'); setRemoving(null); void client.invalidateQueries({ queryKey: ['satker', 'kepatuhan', 'sop'] }) }, onError: (error) => toast.error(errorMessage(error)) })
   const submit = (event: FormEvent) => { event.preventDefault(); const next: Record<string, string[]> = {}; if (creating && !form.unit_pemilik_id) next.unit_pemilik_id = ['Pilih unit.']; if (!form.kode.trim()) next.kode = ['Kode wajib diisi.']; if (!form.judul.trim()) next.judul = ['Judul wajib diisi.']; if (Object.keys(next).length) { setErrors(next); return } setErrors({}); save.mutate() }
-  const openCreate = () => { setEditing(null); setCreating(true); setErrors({}); setForm(blankSop) }
+  const openCreate = () => {
+    setEditing(null)
+    setCreating(true)
+    setErrors({})
+    const defaultUnitId = units.data?.length === 1 ? String(units.data[0].id) : ''
+    setForm({ ...blankSop, unit_pemilik_id: defaultUnitId })
+  }
   const openEdit = (row: Row) => { setEditing(row); setCreating(false); setErrors({}); setForm({ unit_pemilik_id: str(row.unit_pemilik_id), kode: str(row.kode), judul: str(row.judul) }) }
   const finalizeSubmit = useMutation({ mutationFn: async (row: Row) => api.post('/api/sop-versi/' + row.id + '/ajukan'), onSuccess: () => { toast.success('Versi diajukan untuk ditinjau.'); setSubmitting(null); void client.invalidateQueries({ queryKey: ['satker', 'kepatuhan'] }) }, onError: (error) => toast.error(errorMessage(error)) })
   return <section className="ws-panel"><div className="ws-register-tools"><strong>Daftar SOP</strong><button className="primary" onClick={openCreate}><Plus size={16} /> Tambah SOP</button><button className="ws-refresh" aria-label="Perbarui SOP" disabled={list.isFetching} onClick={() => void list.refetch()}><RefreshCw size={16} /></button></div>

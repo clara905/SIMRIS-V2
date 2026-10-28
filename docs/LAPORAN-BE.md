@@ -151,7 +151,7 @@ Selesai: CRUD katalog/master, pohon dan pencegahan siklus kontrol/kategori, taut
 
 Hasil: seluruh suite SQLite dan MySQL masing-masing **512 tes lulus, 2.145 assertion**. Tambahan Tahap 5: 133 tes. Laravel Pint lulus; --dirty tidak tersedia karena workspace bukan Git. Database pengujian terpisah tetap digunakan.
 
-Asumsi: fixture 197 baris sintetis berdasarkan brief karena pengguna menjawab API lokal belum ada. Riwayat/pemicu sinkron khusus SUPER_ADMIN, mutasi aset hanya ADMIN_SATKER pada scope role tersebut. Tidak ada perubahan skema. Detail berada di ASUMSI.md dan README backend.
+Asumsi: fixture 197 baris sintetis berdasarkan brief karena pengguna menjawab API lokal belum ada. Riwayat/pemicu sinkron khusus SUPER_ADMIN, mutasi aset hanya STAFF pada scope role tersebut. ADMIN_SATKER hanya mengelola akun dan data pegawai. Tidak ada perubahan skema. Detail berada di ASUMSI.md dan README backend.
 
 Keputusan/kebutuhan pengguna: nanti sediakan URL API lokal, metode autentikasi, dan respons asli untuk uji integrasi. Driver belum diklaim terhubung ke sistem aset nyata. Ini tidak menghalangi pengujian kontrak dengan Http::fake atau implementasi modul berikutnya.
 
@@ -208,7 +208,7 @@ Selesai: CRUD draft, versi SOP/SOA, detail/benchmark SOA, pengajuan dan review b
 
 Hasil akhir: seluruh suite SQLite dan MySQL masing-masing **678 tes lulus, 2.833 assertion**; 79 tes Tahap 10. Pint bersih. Kegagalan awal generator ditangani dengan traversal iteratif dan batas memori tes 512 MB. Run MySQL akhir dilakukan setelah formatter selesai dan lulus penuh.
 
-Asumsi: status dan alur SOP/SOA mengikuti config/alur_kepatuhan.php; STAFF menyusun draft, Admin mengajukan, review Kasub/Kabid/Kasatker, versi selesai tetap. Tidak ada perubahan skema. Lihat ASUMSI.md.
+Asumsi: status dan alur SOP/SOA mengikuti config/alur_kepatuhan.php; STAFF menyusun dan mengajukan draft, review Kasub/Kabid/Kasatker, versi selesai tetap. ADMIN_SATKER tidak mengelola SOP/SOA. Tidak ada perubahan skema. Lihat ASUMSI.md.
 
 Keputusan pengguna: templat Lampiran 14 belum jadi; hanya kerangka JSON dibuat pada Tahap 11. Ekspor berkas ditunda tanpa menebak format.
 

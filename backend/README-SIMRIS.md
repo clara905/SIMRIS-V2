@@ -89,7 +89,7 @@ Role aktif menggunakan rentang waktu inklusif `mulai <= sekarang <= selesai` (se
 | `/api/periode-penilaian` | CRUD dengan tanggal mulai/selesai |
 | `/api/rencana-kerja` | CRUD kode dan uraian template |
 
-Daftar menggunakan `data`, `links`, `meta`, serta `page`, `per_page` (1–100), `sort` (awalan `-` untuk descending), dan `filter[kolom]=nilai`. Kolom filter/urutan memakai allowlist dalam `AdminService::FILTERS`; filter saat ini berupa kecocokan nilai. SUPER_ADMIN dapat menulis seluruh administrasi. ADMIN_SATKER dapat mengelola sumber daya yang dibatasi scope; untuk unit organisasi, ADMIN_SATKER dapat membuat SATKER tingkat atas baru dan otomatis mendapat role ADMIN_SATKER pada SATKER tersebut, serta membuat unit anak sesuai hierarki yang diizinkan. Role biasa tidak dapat membaca akun dan role scope; seluruh role aktif dapat membaca roles, periode, serta rencana kerja.
+Daftar menggunakan `data`, `links`, `meta`, serta `page`, `per_page` (1–100), `sort` (awalan `-` untuk descending), dan `filter[kolom]=nilai`. Kolom filter/urutan memakai allowlist dalam `AdminService::FILTERS`; filter saat ini berupa kecocokan nilai. SUPER_ADMIN dapat menulis seluruh administrasi. ADMIN_SATKER dapat mengelola akun, role operasional, data pegawai, dan penempatannya dalam scope; struktur unit hanya dapat diubah SUPER_ADMIN. Role biasa tidak dapat membaca akun dan role scope; seluruh role aktif dapat membaca roles, periode, serta rencana kerja.
 
 Sebelum mengubah role scope atau melakukan reset password, panggil `POST /api/konfirmasi-password` dengan `password` dan cookie sesi yang sama. Konfirmasi berlaku 300 detik. Reset password menerima `password` dan `password_confirmation`; hasilnya mewajibkan pengguna mengganti password dan tidak mengembalikan nilai password/hash.
 
@@ -152,7 +152,7 @@ Tes khusus: php artisan test --compact tests/Feature/MetodeRisikoTest.php. Selur
 
 Master CRUD: jenis-ancaman, sumber-ancaman, ancaman, jenis-kerentanan, kerentanan, standar-kontrol, kontrol, regulasi, sumber-aset, kategori-aset, klasifikasi-informasi. Semua role aktif membaca, SUPER_ADMIN menulis. GET kontrol/pohon membaca hierarki. Ancaman menerima sumber_ids untuk tautan sumber. POST {ancaman|kerentanan|kontrol}/impor menerima multipart file CSV; GET endpoint /ekspor mengunduh CSV. Header kolom mengikuti ERD, bukan label tampilan.
 
-GET aset dan aset/{id} menampilkan aset dalam scope. PATCH aset/{id} hanya menerima unit_pemilik_id, kategori_id, klasifikasi_informasi_id, lokasi, deskripsi dari ADMIN_SATKER. POST aset/tetapkan menerima ids (maksimum 100), unit_pemilik_id, kategori_id; kategori tujuan harus sudah dikategorikan. Hasil melaporkan berhasil/gagal dan mengosongkan perlu_ditinjau pada baris berhasil. Tidak ada POST/DELETE aset. Penugasan-aset memakai CRUD terpisah oleh ADMIN_SATKER dalam scope.
+GET aset dan aset/{id} menampilkan aset dalam scope. PATCH aset/{id} hanya menerima unit_pemilik_id, kategori_id, klasifikasi_informasi_id, lokasi, deskripsi dari STAFF dalam scope. POST aset/tetapkan menerima ids (maksimum 100), unit_pemilik_id, kategori_id; kategori tujuan harus sudah dikategorikan. Hasil melaporkan berhasil/gagal dan mengosongkan perlu_ditinjau pada baris berhasil. Tidak ada POST/DELETE aset. Penugasan-aset memakai CRUD terpisah oleh STAFF dalam scope.
 
 Daftar aset menerima q, filter[sumber_id], filter[kategori_id], filter[unit_pemilik_id], filter[kondisi], filter[status], filter[perlu_ditinjau], filter[tahun_pengadaan], page/per_page/sort. Raw payload dan hash tidak diekspos pada resource aset.
 
@@ -202,6 +202,8 @@ Alur lanjutan: POST asesmen/{id}/rencana-penanganan, rencana-penanganan/{id}/pro
 
 ### Tahap 10
 CRUD draft: /api/kontrol-internal, /api/sop, /api/soa. Buat versi: POST sop/{id}/versi atau soa/{id}/versi. Isi SOA: POST soa-versi/{id}/detail dan soa-detail/{id}/benchmark. Pengajuan: POST sop-versi/{id}/ajukan atau soa-versi/{id}/ajukan; review menerima tahap KASUB/KABID/KASATKER, keputusan SETUJU/TOLAK, catatan. Riwayat dibaca lewat sop-review/soa-review dengan filter ID versi.
+
+Mutasi draft, pengajuan, penghapusan, dokumen, lampiran, aset, dan penugasan aset dilakukan oleh STAFF dalam scope. ADMIN_SATKER hanya mengelola akun, role operasional, data pegawai, dan penempatan.
 
 Penautan menggunakan GET/POST/DELETE: kontrol-internal/{id}/standar atau /sop; sop-versi/{id}/kontrol; soa-detail/{id}/sop, /risiko, /bukti; risiko/{id}/kontrol, /kontrol-internal, /sop; rencana-penanganan/{id}/sop. Payload memakai nama FK ERD. Tautan risiko mengikuti pembekuan awal asesmen; tautan penanganan hanya pada status PENANGANAN.
 

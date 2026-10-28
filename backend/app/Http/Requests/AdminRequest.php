@@ -26,6 +26,14 @@ class AdminRequest extends ApiRequest
         return true;
     }
 
+    public function messages(): array
+    {
+        return [
+            ...parent::messages(),
+            'nip.unique' => 'NIP sudah terdaftar. Hubungi super admin untuk proses mutasi.',
+        ];
+    }
+
     public function rules(): array
     {
         if ($this->isMethod('GET')) {

@@ -71,7 +71,7 @@
 - Driver mengikuti kontrak satu respons tanpa paginasi dengan Bearer opsional. Indikasi paginasi menolak sinkron sebelum perubahan aset. Scheduler dinonaktifkan default sampai konfigurasi tersedia.
 - SINKRON_ASET memakai dimulai_pada/selesai_pada tanpa created_at/updated_at sesuai tabel yang sudah disetujui; model mematikan timestamp otomatis. Tidak ada migrasi baru.
 - Riwayat sinkron berisi data lintas unit/peringatan sumber, sehingga akses dibatasi SUPER_ADMIN bersama pemicunya. Aset dan penugasan tetap dibatasi scope unit; SUPER_ADMIN hanya baca aset sesuai brief.
-- Scope mutasi aset dihitung khusus dari grant ADMIN_SATKER, bukan gabungan grant STAFF/pimpinan di unit lain. Penugasan memerlukan pegawai aktif dengan penempatan dalam scope admin.
+- Scope mutasi aset dihitung khusus dari grant STAFF, bukan gabungan grant Admin Satker/pimpinan di unit lain. Penugasan memerlukan pegawai aktif dengan penempatan dalam scope staff.
 - Impor CSV ancaman/kerentanan/kontrol adalah pembuatan per baris, bukan upsert. Header memakai nama kolom ERD, UTF-8, delimiter koma, batas 2 MiB dan 10000 baris. Baris valid disimpan dengan audit atomik; baris gagal dilaporkan. Ekspor menetralkan awalan formula spreadsheet.
 - Hierarki kontrol tidak boleh bersiklus atau lintas standar; kategori tidak boleh bersiklus. ANCAMAN_SUMBER dikelola melalui sumber_ids pada mutasi ancaman dan dicatat audit terpisah.
 - Sinkron menjaga kolom lokal dan kode_aset; pembaruan sumber berdasarkan hash bentuk normal. Satu transaksi per potongan 200 baris. idx valid pada baris ditolak tetap dihitung hadir agar tidak salah ditandai hilang. Jika semua idx tidak valid, penandaan hilang tidak dilakukan.
@@ -82,7 +82,7 @@
 ## Tahap 6 - Dokumen dan lampiran
 
 - Tidak ada perubahan skema. FILE_LAMPIRAN tidak memiliki unit; unggahan wajib menyebut dokumen_versi_id dan langsung ditautkan ke draft. Scope file diturunkan dari dokumen terkait, tidak ditebak dari identitas pengunggah.
-- Penyusun STAFF/ADMIN_SATKER dalam scope role tersebut dapat membuat dokumen, menambah/edit draft, mengunggah/melepas lampiran, dan memfinalkan. Semua role membaca dalam scope; SUPER_ADMIN baca global.
+- STAFF dalam scope dapat membuat dokumen, menambah/edit draft, mengunggah/melepas lampiran, dan memfinalkan. ADMIN_SATKER hanya mengelola akun dan data pegawai. Semua role membaca dalam scope; SUPER_ADMIN baca global.
 - Nomor versi dokumen dihasilkan berurutan di bawah lock dokumen. Versi FINAL tidak dapat dibuka kembali. Semua lampiran harus AMAN sebelum FINAL, termasuk bila dokumen memiliki teks.
 - Disk lampiran privat terpisah, tanpa serve/URL publik. Nama penyimpanan acak; storage_key tidak ditampilkan. Download memeriksa scope, status AMAN, keberadaan, dan checksum.
 - Pemindai bawaan memeriksa MIME dari isi, checksum, ukuran dan nama dengan satu ekstensi; nama seperti laporan.v1.pdf ditolak oleh aturan ekstensi ganda. Konfigurasi awal PDF, PNG, JPG/JPEG, TXT, maksimum 10 MiB. Ini pemeriksaan dasar, bukan pemindai malware/ClamAV.
@@ -119,7 +119,7 @@
 
 ## Tahap 10
 - Brief tidak merinci status SOP/SOA; config/alur_kepatuhan.php memakai DRAFT, MENUNGGU_KASUB, MENUNGGU_KABID, MENUNGGU_KASATKER, DISAHKAN, DITOLAK. Penolakan membuat versi lama tetap; penyusun membuat versi baru melalui endpoint versi. Tidak menambah kolom skema.
-- STAFF dapat menyusun draft dalam scope. ADMIN_SATKER mengajukan dan menghapus draft. Reviewer tidak mereview versi sendiri; Kasub tidak merangkap reviewer berikutnya. Skip level mengikuti config/alur_review.php.
+- STAFF dapat menyusun, mengajukan, dan menghapus draft dalam scope. ADMIN_SATKER hanya mengelola akun dan data pegawai. Reviewer tidak mereview versi sendiri; Kasub tidak merangkap reviewer berikutnya. Skip level mengikuti config/alur_review.php.
 - Tautan operasional memakai SOP DISAHKAN dan dokumen FINAL/AMAN. Detail SOA hanya memakai kontrol dari standar SOA. Standar/periode induk tidak berubah setelah versi dibuat.
 - Scope bertingkat ditelusuri secara iteratif agar analisis tipe Scramble tidak rekursif. PHPUnit diberi batas memori 512 MB untuk keseluruhan kontrak API.
 
