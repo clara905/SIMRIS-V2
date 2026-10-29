@@ -27,11 +27,14 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { KelolaPage } from '../satker/KelolaPage'
+import { KelolaUnit } from '../satker/KelolaUnit'
+import { KelolaPegawai } from '../satker/KelolaPegawai'
+import { KelolaPengguna } from '../satker/KelolaPengguna'
 import { SatkerBeranda } from '../satker/SatkerBeranda'
 import { useSatkerUnit } from '../satker/api'
 import { isAssetPendingAssessment } from '../aset/assessment'
 import { api, errorMessage } from '../../api/client'
-import { logout, updateProfile, useSession, sessionKey } from '../../api/auth'
+import { logout, revealNip, updateProfile, useSession, sessionKey } from '../../api/auth'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Drawer } from '../../components/Drawer'
 import { modules, label, display, type Resource } from './resources'
@@ -254,6 +257,12 @@ export function BackendWorkspace() {
             isSatkerAdmin ? <SatkerBeranda /> : <Overview />
           ) : active.path.startsWith('/kelola/') ? (
             <KelolaPage item={active} />
+          ) : active.path === '/unit' && roleCodes.includes('SUPER_ADMIN') ? (
+            <KelolaUnit superAdmin />
+          ) : active.path === '/pegawai' && roleCodes.includes('SUPER_ADMIN') ? (
+            <KelolaPegawai superAdmin />
+          ) : active.path === '/pengguna' && roleCodes.includes('SUPER_ADMIN') ? (
+            <KelolaPengguna superAdmin />
           ) : (
             <>
               <div className="ws-page-heading">
@@ -303,27 +312,34 @@ function Profile({ session }: { session: ReturnType<typeof useSession>['data'] }
   const client = useQueryClient()
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [revealPassword, setRevealPassword] = useState('')
+  const [revealedNip, setRevealedNip] = useState<string | null>(null)
+  const [showReveal, setShowReveal] = useState(false)
+  const [revealing, setRevealing] = useState(false)
   const [nama, setNama] = useState(session?.pegawai?.nama || session?.nama || '')
-  const [emailKontak, setEmailKontak] = useState(
-    session?.pegawai?.email_kontak || session?.email || '',
-  )
-  const [nip, setNip] = useState(session?.pegawai?.nip || '')
+  const [email, setEmail] = useState(session?.email || session?.pegawai?.email_kontak || '')
+  const [nip, setNip] = useState('')
   const [jenisKepegawaian, setJenisKepegawaian] = useState(
     session?.pegawai?.jenis_kepegawaian || 'PNS',
   )
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (nip.trim() && !/^\d{1,18}$/.test(nip.trim())) {
+      toast.error('NIP hanya boleh berisi 1 sampai 18 digit angka.')
+      return
+    }
     setIsSaving(true)
     try {
       await updateProfile({
         nama,
-        email_kontak: emailKontak,
+        email,
         nip: nip.trim() ? nip.trim() : null,
         jenis_kepegawaian: jenisKepegawaian || 'PNS',
       })
       await client.invalidateQueries({ queryKey: sessionKey })
       toast.success('Data profil berhasil diperbarui')
+      setRevealedNip(null)
       setIsEditing(false)
     } catch (err) {
       toast.error(errorMessage(err))
@@ -346,8 +362,8 @@ function Profile({ session }: { session: ReturnType<typeof useSession>['data'] }
           onClick={() => {
             if (!isEditing) {
               setNama(session?.pegawai?.nama || session?.nama || '')
-              setEmailKontak(session?.pegawai?.email_kontak || session?.email || '')
-              setNip(session?.pegawai?.nip || '')
+              setEmail(session?.email || session?.pegawai?.email_kontak || '')
+              setNip('')
               setJenisKepegawaian(session?.pegawai?.jenis_kepegawaian || 'PNS')
             }
             setIsEditing((prev) => !prev)
@@ -386,13 +402,13 @@ function Profile({ session }: { session: ReturnType<typeof useSession>['data'] }
               </div>
 
               <div className="ws-profile-field">
-                <label htmlFor="profil-email-kontak">Email Kontak</label>
+                <label htmlFor="profil-email">Email</label>
                 <input
-                  id="profil-email-kontak"
+                  id="profil-email"
                   type="email"
                   required
-                  value={emailKontak}
-                  onChange={(e) => setEmailKontak(e.target.value)}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   placeholder="nama@instansi.go.id"
                   disabled={isSaving}
                 />
@@ -406,7 +422,8 @@ function Profile({ session }: { session: ReturnType<typeof useSession>['data'] }
                   maxLength={18}
                   value={nip}
                   onChange={(e) => setNip(e.target.value)}
-                  placeholder="18 digit angka NIP"
+                  placeholder="Maksimal 18 digit angka"
+                  inputMode="numeric"
                   disabled={isSaving}
                 />
               </div>
@@ -456,16 +473,34 @@ function Profile({ session }: { session: ReturnType<typeof useSession>['data'] }
               <dd>{session?.nama ?? '-'}</dd>
             </div>
             <div>
-              <dt>Email Login Akun</dt>
-              <dd>{session?.email ?? '-'}</dd>
+              <dt>Email</dt>
+              <dd>{session?.email || session?.pegawai?.email_kontak || '-'}</dd>
             </div>
             <div>
-              <dt>Email Kontak</dt>
-              <dd>{session?.pegawai?.email_kontak || '-'}</dd>
-            </div>
-            <div>
-              <dt>NIP</dt>
-              <dd>{session?.pegawai?.nip || 'Belum diisi'}</dd>
+              <dt>NIP (tersensor)</dt>
+              <dd>
+                {revealedNip ??
+                  (session?.pegawai?.nip_tersedia
+                    ? session.pegawai.nip
+                    : 'Belum diisi')}
+                {session?.pegawai?.nip_tersedia && (
+                  <button
+                    type="button"
+                    className="ws-row-open"
+                    aria-label={revealedNip ? 'Sensor NIP' : 'Lihat NIP'}
+                    onClick={() => {
+                      if (revealedNip) {
+                        setRevealedNip(null)
+                      } else {
+                        setRevealPassword('')
+                        setShowReveal(true)
+                      }
+                    }}
+                  >
+                    {revealedNip ? 'Sensor' : 'Lihat'}
+                  </button>
+                )}
+              </dd>
             </div>
             <div>
               <dt>Jenis Kepegawaian</dt>
@@ -490,6 +525,53 @@ function Profile({ session }: { session: ReturnType<typeof useSession>['data'] }
           </dl>
         )}
       </section>
+      <Drawer
+        open={showReveal}
+        onClose={() => {
+          setShowReveal(false)
+          setRevealPassword('')
+        }}
+        title="Konfirmasi untuk melihat NIP"
+        description="Masukkan password akun Anda untuk menampilkan NIP."
+      >
+        <form
+          className="ws-profile-form"
+          onSubmit={async (event) => {
+            event.preventDefault()
+            if (!session?.pegawai?.id || !revealPassword) {
+              toast.error('Masukkan password akun Anda.')
+              return
+            }
+            setRevealing(true)
+            try {
+              setRevealedNip(await revealNip(session.pegawai.id, revealPassword))
+              setShowReveal(false)
+              setRevealPassword('')
+            } catch (error) {
+              toast.error(errorMessage(error))
+            } finally {
+              setRevealing(false)
+            }
+          }}
+        >
+          <div className="ws-profile-field">
+            <label htmlFor="profile-nip-password">Password akun Anda</label>
+            <input
+              id="profile-nip-password"
+              type="password"
+              value={revealPassword}
+              onChange={(event) => setRevealPassword(event.target.value)}
+              disabled={revealing}
+              autoComplete="current-password"
+            />
+          </div>
+          <div className="ws-profile-actions">
+            <button className="primary" disabled={revealing}>
+              {revealing ? 'Memverifikasi...' : 'Verifikasi & lihat NIP'}
+            </button>
+          </div>
+        </form>
+      </Drawer>
     </>
   )
 }

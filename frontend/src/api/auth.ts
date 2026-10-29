@@ -8,6 +8,7 @@ export type SessionUser = components['schemas']['SessionUser'] & {
   pegawai?: {
     id: number
     nip?: string | null
+    nip_tersedia?: boolean
     nama: string
     email_kontak: string
     jenis_kepegawaian?: string | null
@@ -15,7 +16,7 @@ export type SessionUser = components['schemas']['SessionUser'] & {
 }
 export interface BackendSession {
   user: { id: number; username: string; email_login: string; wajib_ganti_password: boolean }
-  pegawai: { id: number; nip?: string | null; nama: string; email_kontak: string; jenis_kepegawaian?: string | null } | null
+  pegawai: { id: number; nip?: string | null; nip_tersedia?: boolean; nama: string; email_kontak: string; jenis_kepegawaian?: string | null } | null
   roles: { kode: string; nama: string; unit_id: number | null }[]
 }
 export function normalizeSession(data: SessionUser | BackendSession): SessionUser {
@@ -66,11 +67,18 @@ export async function register(values: {
 }
 export async function updateProfile(values: {
   nama: string
-  email_kontak: string
+  email: string
   nip?: string | null
   jenis_kepegawaian?: string | null
 }) {
   return (await api.put<{ data: SessionUser | BackendSession }>('/api/profil', values)).data
+}
+export async function revealNip(employeeId: number, password: string): Promise<string> {
+  const response = await api.post<{ data: { nip: string | null } }>(
+    `/api/pegawai/${employeeId}/lihat-nip`,
+    { password },
+  )
+  return response.data.data.nip ?? ''
 }
 export async function logout() {
   await api.post('/logout')

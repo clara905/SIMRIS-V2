@@ -23,7 +23,7 @@ class AdminService
 {
     public const MODELS = ['users' => User::class, 'user-role-scope' => UserRoleScope::class, 'roles' => Role::class, 'unit-organisasi' => UnitOrganisasi::class, 'pegawai' => Pegawai::class, 'penempatan-pegawai' => PenempatanPegawai::class, 'periode-penilaian' => PeriodePenilaian::class, 'rencana-kerja' => RencanaKerja::class];
 
-    public const FILTERS = ['users' => ['id', 'username', 'email_login', 'aktif', 'pegawai_id'], 'user-role-scope' => ['id', 'user_id', 'role_id', 'unit_id'], 'roles' => ['id', 'kode', 'nama'], 'unit-organisasi' => ['id', 'kode', 'nama', 'jenis', 'parent_id', 'aktif'], 'pegawai' => ['id', 'nip', 'nama', 'aktif', 'jenis_kepegawaian'], 'penempatan-pegawai' => ['id', 'pegawai_id', 'unit_id', 'utama', 'mulai', 'selesai'], 'periode-penilaian' => ['id', 'nama', 'tanggal_mulai', 'tanggal_selesai'], 'rencana-kerja' => ['id', 'kode', 'uraian_template']];
+    public const FILTERS = ['users' => ['id', 'username', 'email_login', 'aktif', 'pegawai_id'], 'user-role-scope' => ['id', 'user_id', 'role_id', 'unit_id'], 'roles' => ['id', 'kode', 'nama'], 'unit-organisasi' => ['id', 'kode', 'nama', 'jenis', 'parent_id', 'aktif'], 'pegawai' => ['id', 'nama', 'aktif', 'jenis_kepegawaian'], 'penempatan-pegawai' => ['id', 'pegawai_id', 'unit_id', 'utama', 'mulai', 'selesai'], 'periode-penilaian' => ['id', 'nama', 'tanggal_mulai', 'tanggal_selesai'], 'rencana-kerja' => ['id', 'kode', 'uraian_template']];
 
     public function __construct(private ScopeUnit $scope, private HierarkiService $hierarki, private PenempatanService $penempatan, private AuditService $audit) {}
 
@@ -76,7 +76,38 @@ class AdminService
             throw ValidationException::withMessages(['sort' => ['Kolom urutan tidak diperbolehkan.']]);
         }
 
-        return $query->orderBy($column, str_starts_with($sort, '-') ? 'desc' : 'asc')->orderBy('id')->paginate((int) ($input['per_page'] ?? 20))->withQueryString();
+        $page = $query->orderBy($column, str_starts_with($sort, '-') ? 'desc' : 'asc')
+            ->orderBy('id')
+            ->paginate((int) ($input['per_page'] ?? 20))
+            ->withQueryString();
+        if ($resource === 'users' && $page->isNotEmpty()) {
+            $employeeIds = $page->getCollection()->pluck('pegawai_id')->filter()->unique()->values();
+            $placements = DB::table('PENEMPATAN_PEGAWAI as p')
+                ->join('UNIT_ORGANISASI as u', 'u.id', '=', 'p.unit_id')
+                ->whereIn('p.pegawai_id', $employeeIds)
+                ->where('p.mulai', '<=', today())
+                ->where(fn ($q) => $q->whereNull('p.selesai')->orWhere('p.selesai', '>=', today()))
+                ->orderByDesc('p.utama')
+                ->orderBy('u.kode')
+                ->get(['p.pegawai_id', 'p.unit_id', 'p.mulai', 'p.selesai', 'p.utama', 'u.kode', 'u.nama', 'u.jenis'])
+                ->groupBy('pegawai_id');
+            foreach ($page->getCollection() as $user) {
+                $user->setAttribute(
+                    'penempatan_aktif',
+                    $placements->get($user->pegawai_id, collect())->map(fn ($placement) => [
+                        'unit_id' => $placement->unit_id,
+                        'kode' => $placement->kode,
+                        'nama' => $placement->nama,
+                        'jenis' => $placement->jenis,
+                        'utama' => (bool) $placement->utama,
+                        'mulai' => $placement->mulai,
+                        'selesai' => $placement->selesai,
+                    ])->values()->all(),
+                );
+            }
+        }
+
+        return $page;
     }
 
     public function mutate(string $resource, ?int $id, array $data, string $action, User $actor): Model
@@ -92,13 +123,16 @@ class AdminService
                 if (in_array($action, ['aktifkan', 'nonaktifkan'], true)) {
                     $data = ['aktif' => $action === 'aktifkan'];
                 }
-                if ($action === 'delete' && in_array($resource, ['users', 'unit-organisasi', 'pegawai'], true)) {
+                if ($action === 'delete' && $resource === 'unit-organisasi') {
                     $data = ['aktif' => false];
                     $action = 'update';
                 }
                 if ($resource === 'users') {
                     if (! $this->scope->isSuper($actor)) {
                         $this->assertSatkerUserTarget($model, $data, $actor);
+                    }
+                    if ($action === 'delete' && (int) $model->id === (int) $actor->id) {
+                        throw new BusinessRuleException('tidak_boleh_hapus_diri', 'Anda tidak dapat menghapus akun yang sedang digunakan.');
                     }
                     if ($model->id === $actor->id && array_key_exists('aktif', $data) && ! $data['aktif']) {
                         throw new BusinessRuleException('tidak_boleh_nonaktifkan_diri', 'SUPER_ADMIN tidak boleh menonaktifkan akun sendiri.');
@@ -150,12 +184,29 @@ class AdminService
                         throw new BusinessRuleException('rentang_tanggal_tidak_valid', 'Tanggal selesai tidak boleh sebelum tanggal mulai.');
                     }
                 }
-                if ($action === 'delete') {
-                    $model->delete();
-                } elseif ($resource === 'penempatan-pegawai') {
-                    $model = $this->penempatan->save($data, $id ? $model : null);
-                } else {
-                    $model->fill($data)->save();
+                $roleScopeAudit = $resource === 'user-role-scope';
+                if ($roleScopeAudit) {
+                    $model->suppressAutomaticAudit = true;
+                }
+                try {
+                    if ($action === 'delete') {
+                        if ($resource === 'users') {
+                            $this->deleteUserRoleScopes($model, $this->scope->isSuper($actor));
+                        }
+                        $model->delete();
+                    } elseif ($resource === 'penempatan-pegawai') {
+                        if (! $this->scope->isSuper($actor)) {
+                            // Kolom implementasi utama tidak dikendalikan klien Admin Satker.
+                            $data['utama'] = true;
+                        }
+                        $model = $this->penempatan->save($data, $id ? $model : null);
+                    } else {
+                        $model->fill($data)->save();
+                    }
+                } finally {
+                    if ($roleScopeAudit) {
+                        $model->suppressAutomaticAudit = false;
+                    }
                 }
                 if (in_array($resource, ['users', 'user-role-scope'], true)) {
                     $this->assertSuperAdminRemains();
@@ -164,17 +215,20 @@ class AdminService
                     $after = $action === 'delete' ? null : $model->getAttributes();
                     if (! $this->scope->isSuper($actor)) {
                         $roleCode = $action === 'delete' ? Role::find($before['role_id'])?->kode : Role::find($model->role_id)?->kode;
-                        $marker = ['oleh_admin_satker' => true, 'role' => $roleCode];
+                        $marker = ['oleh_admin_satker' => true, 'peran' => $roleCode];
                         if ($roleCode === 'KASATKER') {
-                            $marker['perubahan_kasatker'] = true;
+                            $marker['penanda'] = $action === 'delete' ? 'KASATKER_DICABUT' : 'KASATKER_DIBERIKAN';
                         }
                         $before = [...$before, ...$marker];
-                        $after = $after === null ? null : [...$after, ...$marker];
+                        $after = [...($after ?? []), ...$marker];
+                    } else {
+                        $roleCode = $action === 'delete' ? Role::find($before['role_id'])?->kode : Role::find($model->role_id)?->kode;
+                        $after = [...($after ?? []), 'oleh_admin_satker' => false, 'peran' => $roleCode];
                     }
                     $this->audit->record($model->getTable(), (int) $model->id, 'ROLE_CHANGE', $before, $after);
                 }
                 if ($action === 'reset-password') {
-                    $this->audit->record('USERS', (int) $model->id, 'PASSWORD_RESET');
+                    $this->audit->record('USERS', (int) $model->id, 'PASSWORD_RESET', null, ['oleh_admin_satker' => ! $this->scope->isSuper($actor)]);
                 }
                 $this->scope->forget($actor);
 
@@ -182,9 +236,41 @@ class AdminService
             });
         } catch (QueryException $exception) {
             if (str_starts_with((string) $exception->getCode(), '23') || in_array($exception->errorInfo[1] ?? null, [19, 1062, 1451, 1452], true)) {
+                if ($action === 'delete' && $resource === 'pegawai') {
+                    throw new BusinessRuleException('pegawai_masih_digunakan', 'Pegawai masih memiliki riwayat penempatan atau terhubung ke data operasional. Data terkait dipertahankan; hapus tidak dapat dilanjutkan.');
+                }
+                if ($action === 'delete' && $resource === 'users') {
+                    throw new BusinessRuleException('pengguna_masih_digunakan', 'Akun masih dirujuk oleh audit atau riwayat operasional. Data terkait dipertahankan; hapus tidak dapat dilanjutkan.');
+                }
                 throw new BusinessRuleException('integritas_data', 'Data masih dirujuk atau melanggar kunci unik. Periksa kembali data terkait.');
             }
             throw $exception;
+        }
+    }
+
+    private function deleteUserRoleScopes(Model $user, bool $superAdmin): void
+    {
+        $scopes = UserRoleScope::where('user_id', $user->id)->lockForUpdate()->get();
+        foreach ($scopes as $scope) {
+            $roleCode = Role::find($scope->role_id)?->kode;
+            $before = $scope->getAttributes();
+            $marker = ['oleh_admin_satker' => ! $superAdmin, 'peran' => $roleCode];
+            if ($roleCode === 'KASATKER') {
+                $marker['penanda'] = 'KASATKER_DICABUT';
+            }
+            $scope->suppressAutomaticAudit = true;
+            try {
+                $scope->delete();
+            } finally {
+                $scope->suppressAutomaticAudit = false;
+            }
+            $this->audit->record(
+                $scope->getTable(),
+                (int) $scope->id,
+                'ROLE_CHANGE',
+                [...$before, ...$marker],
+                $marker,
+            );
         }
     }
 
@@ -294,7 +380,12 @@ class AdminService
                 throw new BusinessRuleException('unit_di_luar_scope', 'Unit berada di luar wilayah Admin Satker.');
             }
             if ($model->parent_id === null || $model->jenis === 'SATKER') {
-                throw new BusinessRuleException('unit_satker_dilindungi', 'Unit SATKER akar tidak dapat diubah atau dinonaktifkan oleh Admin Satker.');
+                $allowedFields = ['kode', 'nama'];
+                if ($action === 'delete' || array_diff(array_keys($data), $allowedFields)) {
+                    throw new BusinessRuleException('unit_satker_dilindungi', 'Admin Satker hanya dapat mengubah kode dan nama SATKER yang menjadi wilayahnya.');
+                }
+
+                return;
             }
         }
         if (! $model->exists) {

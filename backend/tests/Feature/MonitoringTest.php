@@ -74,10 +74,10 @@ test('audit filtering export redaction and CSV formula escaping preserve safe da
     $actor = User::factory()->create();
     grantRole($actor, 'SUPER_ADMIN');
     $this->actingAs($actor);
-    DB::transaction(fn () => app(AuditService::class)->record('UJI', 123, '=2+2', null, ['nama' => '=HYPERLINK(test)', 'token' => 'rahasia', 'isi_teks' => 'jangan tampil']));
-    $this->getJson('/api/log-audit?filter[entitas]=UJI&sort=-id')->assertOk()->assertJsonCount(1, 'data')->assertJsonMissing(['token' => 'rahasia'])->assertJsonMissing(['isi_teks' => 'jangan tampil']);
+    DB::transaction(fn () => app(AuditService::class)->record('UJI', 123, '=2+2', null, ['nama' => '=HYPERLINK(test)', 'token' => 'rahasia', 'nip' => '199001012015011001', 'isi_teks' => 'jangan tampil']));
+    $this->getJson('/api/log-audit?filter[entitas]=UJI&sort=-id')->assertOk()->assertJsonCount(1, 'data')->assertJsonMissing(['token' => 'rahasia'])->assertJsonMissing(['nip' => '199001012015011001'])->assertJsonMissing(['isi_teks' => 'jangan tampil']);
     $csv = $this->get('/api/log-audit/ekspor?filter[entitas]=UJI')->assertOk()->streamedContent();
-    expect($csv)->toContain("'=2+2")->toContain('UJI')->not->toContain('rahasia')->not->toContain('jangan tampil');
+    expect($csv)->toContain("'=2+2")->toContain('UJI')->not->toContain('rahasia')->not->toContain('199001012015011001')->not->toContain('jangan tampil');
     $this->getJson('/api/log-audit?filter[password_hash]=x')->assertUnprocessable();
 });
 test('report validates required assessment and never guesses a file export', function (): void {

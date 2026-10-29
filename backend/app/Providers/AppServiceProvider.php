@@ -56,6 +56,7 @@ class AppServiceProvider extends ServiceProvider
                 DeprecationExtension::class,
             ]));
         Gate::define('kepatuhan.write', [KepatuhanPolicy::class, 'write']);
+        Gate::define('kepatuhan.review-sop', [KepatuhanPolicy::class, 'reviewSop']);
         Gate::define('asesmen.view', [AsesmenPolicy::class, 'view']);
         Gate::define('asesmen.create', [AsesmenPolicy::class, 'create']);
         Gate::define('asesmen.write', [AsesmenPolicy::class, 'write']);

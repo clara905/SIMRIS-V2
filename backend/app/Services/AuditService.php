@@ -19,7 +19,7 @@ class AuditService
     {
         $safe = [];
         foreach ($data as $key => $value) {
-            if (preg_match('/password|hash|token|secret|totp|authorization|cookie|isi_file|isi_teks|file_content|contents|data_mentah/i', (string) $key)) {
+            if (preg_match('/password|hash|token|secret|totp|authorization|cookie|nip|isi_file|isi_teks|file_content|contents|data_mentah/i', (string) $key)) {
                 continue;
             }
             if (is_array($value)) {

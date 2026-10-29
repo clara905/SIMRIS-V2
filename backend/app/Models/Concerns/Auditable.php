@@ -9,9 +9,21 @@ trait Auditable
 {
     public static function bootAuditable(): void
     {
-        static::created(fn ($model) => app(AuditService::class)->record($model->getTable(), (int) $model->getKey(), 'CREATE', null, $model->getAttributes()));
-        static::updated(fn ($model) => app(AuditService::class)->record($model->getTable(), (int) $model->getKey(), 'UPDATE', $model->getRawOriginal(), $model->getAttributes()));
-        static::deleted(fn ($model) => app(AuditService::class)->record($model->getTable(), (int) $model->getKey(), 'DELETE', $model->getAttributes()));
+        static::created(function ($model): void {
+            if (! property_exists($model, 'suppressAutomaticAudit') || ! $model->suppressAutomaticAudit) {
+                app(AuditService::class)->record($model->getTable(), (int) $model->getKey(), 'CREATE', null, $model->getAttributes());
+            }
+        });
+        static::updated(function ($model): void {
+            if (! property_exists($model, 'suppressAutomaticAudit') || ! $model->suppressAutomaticAudit) {
+                app(AuditService::class)->record($model->getTable(), (int) $model->getKey(), 'UPDATE', $model->getRawOriginal(), $model->getAttributes());
+            }
+        });
+        static::deleted(function ($model): void {
+            if (! property_exists($model, 'suppressAutomaticAudit') || ! $model->suppressAutomaticAudit) {
+                app(AuditService::class)->record($model->getTable(), (int) $model->getKey(), 'DELETE', $model->getAttributes());
+            }
+        });
     }
 
     public function save(array $options = []): bool

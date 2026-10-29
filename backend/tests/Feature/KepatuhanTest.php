@@ -37,7 +37,7 @@ function kepatuhanFixture(): array
     $proof = DokumenVersi::factory()->create(['dokumen_id' => $document->id]);
     $proof->update(['status' => 'FINAL']);
     $sop = Sop::factory()->create(['unit_pemilik_id' => $unit->id]);
-    $sopVersion = SopVersi::factory()->create(['sop_id' => $sop->id, 'dokumen_versi_id' => $proof->id, 'dibuat_oleh' => $actors['STAFF']->id]);
+    $sopVersion = SopVersi::factory()->create(['sop_id' => $sop->id, 'dokumen_versi_id' => $proof->id, 'dibuat_oleh' => $actors['ADMIN_SATKER']->id]);
     $soa = Soa::factory()->create(['unit_id' => $unit->id]);
     $soaVersion = SoaVersi::factory()->create(['soa_id' => $soa->id, 'dibuat_oleh' => $actors['STAFF']->id]);
     $control = Kontrol::factory()->create(['standar_id' => $soa->standar_id]);
@@ -51,7 +51,8 @@ test('compliance draft reads and updates enforce all roles', function (string $r
     $url = '/api/'.$resource.'/'.$f[$key]->id;
     $this->actingAs($f['actors'][$role])->getJson($url)->assertOk();
     $response = $this->patchJson($url, $payload);
-    if (in_array($role, ['STAFF', 'ADMIN_SATKER'], true)) {
+    $staffRestricted = $role === 'STAFF' && in_array($resource, ['kontrol-internal', 'sop', 'sop-versi'], true);
+    if (in_array($role, ['STAFF', 'ADMIN_SATKER'], true) && ! $staffRestricted) {
         $response->assertOk();
     } else {
         $response->assertForbidden();
@@ -62,22 +63,50 @@ test('SOP and SOA journey freezes descendants and keeps review history', functio
     $id = $f[$key]->id;
     $url = '/api/'.$resource.'/'.$id;
     $this->actingAs($f['actors']['STAFF'])->postJson($url.'/ajukan')->assertForbidden();
-    $this->actingAs($f['actors']['ADMIN_SATKER'])->postJson($url.'/ajukan')->assertOk()->assertJsonPath('data.status', 'MENUNGGU_KASUB');
+    $submittedStatus = $resource === 'sop-versi' ? 'MENUNGGU_SUPER_ADMIN' : 'MENUNGGU_KASUB';
+    if ($resource === 'sop-versi') {
+        foreach (['STAFF', 'KASUB', 'KABID', 'KASATKER'] as $role) {
+            $this->actingAs($f['actors'][$role])->postJson($url.'/ajukan')->assertForbidden();
+        }
+    }
+    $this->actingAs($f['actors']['ADMIN_SATKER'])->postJson($url.'/ajukan')->assertOk()->assertJsonPath('data.status', $submittedStatus);
     $this->patchJson($url, [])->assertConflict();
-    foreach (['KASUB' => 'MENUNGGU_KABID', 'KABID' => 'MENUNGGU_KASATKER', 'KASATKER' => 'DISAHKAN'] as $role => $state) {
-        $this->actingAs($f['actors'][$role])->postJson($url.'/review', ['tahap' => $role, 'keputusan' => 'SETUJU'])->assertOk()->assertJsonPath('data.status', $state);
+    if ($resource === 'sop-versi') {
+        foreach (['ADMIN_SATKER', 'KASUB', 'KABID', 'KASATKER'] as $role) {
+            $this->actingAs($f['actors'][$role])->postJson($url.'/review', ['tahap' => 'SUPER_ADMIN', 'keputusan' => 'SETUJU'])->assertForbidden();
+        }
+        $this->actingAs($f['actors']['SUPER_ADMIN'])->postJson($url.'/review', ['tahap' => 'SUPER_ADMIN', 'keputusan' => 'SETUJU'])->assertOk()->assertJsonPath('data.status', 'DISAHKAN');
+        $this->assertDatabaseHas('SOP_REVIEW', ['sop_versi_id' => $id, 'reviewer_id' => $f['actors']['SUPER_ADMIN']->id, 'tahap' => 'SUPER_ADMIN', 'keputusan' => 'SETUJU']);
+        $this->assertDatabaseHas('LOG_AUDIT', ['entitas' => 'SOP_VERSI', 'entitas_id' => $id, 'aksi' => 'APPROVE']);
+    } else {
+        foreach (['KASUB' => 'MENUNGGU_KABID', 'KABID' => 'MENUNGGU_KASATKER', 'KASATKER' => 'DISAHKAN'] as $role => $state) {
+            $this->actingAs($f['actors'][$role])->postJson($url.'/review', ['tahap' => $role, 'keputusan' => 'SETUJU'])->assertOk()->assertJsonPath('data.status', $state);
+        }
     }
     $this->actingAs($f['actors']['ADMIN_SATKER'])->deleteJson($url)->assertConflict();
     if ($resource === 'soa-versi') {
         $this->patchJson('/api/soa-detail/'.$f['detail']->id, ['alasan' => 'Ubah beku'])->assertConflict();
         $this->postJson('/api/soa-detail/'.$f['detail']->id.'/benchmark', ['regulasi_id' => Regulasi::factory()->create()->id, 'rujukan' => 'Pasal 2'])->assertConflict();
     }
-    $this->getJson('/api/'.str_replace('versi', 'review', $resource))->assertOk()->assertJsonCount(3, 'data');
+    $this->getJson('/api/'.str_replace('versi', 'review', $resource))->assertOk()->assertJsonCount($resource === 'sop-versi' ? 1 : 3, 'data');
 })->with([['sop-versi', 'sopVersion'], ['soa-versi', 'soaVersion']]);
-test('compliance reviewer matrix matches hierarchy for every phase', function (string $role, string $stage, string $resource, string $key): void {
+test('SOP reviewers are limited to super admin while SOA keeps its existing hierarchy', function (string $role, string $stage, string $resource, string $key): void {
     $f = kepatuhanFixture();
-    DB::table($f[$key]->getTable())->where('id', $f[$key]->id)->update(['status' => 'MENUNGGU_'.$stage]);
-    $response = $this->actingAs($f['actors'][$role])->postJson('/api/'.$resource.'/'.$f[$key]->id.'/review', ['tahap' => $stage, 'keputusan' => 'TOLAK', 'catatan' => 'Perbaiki']);
+    $sop = $resource === 'sop-versi';
+    $actualStage = $sop ? 'SUPER_ADMIN' : $stage;
+    DB::table($f[$key]->getTable())->where('id', $f[$key]->id)->update(['status' => $sop ? 'MENUNGGU_SUPER_ADMIN' : 'MENUNGGU_'.$stage]);
+    $response = $this->actingAs($f['actors'][$role])->postJson('/api/'.$resource.'/'.$f[$key]->id.'/review', ['tahap' => $actualStage, 'keputusan' => 'TOLAK', 'catatan' => 'Perbaiki']);
+    if ($sop) {
+        if ($role === 'SUPER_ADMIN') {
+            $response->assertOk()->assertJsonPath('data.status', 'DITOLAK');
+            $this->assertDatabaseHas('SOP_REVIEW', ['sop_versi_id' => $f[$key]->id, 'tahap' => 'SUPER_ADMIN', 'keputusan' => 'TOLAK']);
+            $this->assertDatabaseHas('LOG_AUDIT', ['entitas' => 'SOP_VERSI', 'entitas_id' => $f[$key]->id, 'aksi' => 'REJECT']);
+        } else {
+            $response->assertForbidden();
+        }
+
+        return;
+    }
     if ($role === $stage) {
         $response->assertOk()->assertJsonPath('data.status', 'DITOLAK');
     } else {
@@ -124,17 +153,33 @@ test('SOP linking requires approved versions and matching internal control pivot
     DB::table('ASESMEN_RISIKO')->where('id', $assessment->id)->update(['status' => 'PENANGANAN', 'dibekukan_awal_pada' => now()]);
     $this->deleteJson('/api/risiko/'.$risk->id.'/sop', [...$sopPayload, 'kontrol_internal_id' => $f['internal']->id])->assertConflict();
 });
+test('staff cannot change SOP and internal-control links but may still write SOA evidence', function (): void {
+    $f = kepatuhanFixture();
+    $this->actingAs($f['actors']['STAFF']);
+    $this->postJson('/api/sop-versi/'.$f['sopVersion']->id.'/kontrol', ['kontrol_id' => $f['control']->id])->assertForbidden();
+    $this->postJson('/api/kontrol-internal/'.$f['internal']->id.'/sop', ['sop_versi_id' => $f['sopVersion']->id])->assertForbidden();
+    $this->postJson('/api/kontrol-internal/'.$f['internal']->id.'/standar', ['kontrol_id' => $f['control']->id, 'keterangan' => 'Acuan'])->assertForbidden();
+    $this->postJson('/api/soa-detail/'.$f['detail']->id.'/bukti', ['dokumen_versi_id' => $f['proof']->id, 'keterangan' => 'Bukti'])->assertCreated();
+});
 test('compliance requires rejection notes and denies self review with atomic audit failure', function (): void {
     $f = kepatuhanFixture();
-    DB::table('SOP_VERSI')->where('id', $f['sopVersion']->id)->update(['status' => 'MENUNGGU_KASUB']);
+    DB::table('SOP_VERSI')->where('id', $f['sopVersion']->id)->update(['status' => 'MENUNGGU_SUPER_ADMIN', 'dibuat_oleh' => $f['actors']['SUPER_ADMIN']->id]);
     $url = '/api/sop-versi/'.$f['sopVersion']->id.'/review';
-    $this->actingAs($f['actors']['KASUB'])->postJson($url, ['tahap' => 'KASUB', 'keputusan' => 'TOLAK'])->assertConflict();
-    grantRole($f['actors']['STAFF'], 'KASUB', $f['unit']->id);
-    $this->actingAs($f['actors']['STAFF'])->postJson($url, ['tahap' => 'KASUB', 'keputusan' => 'SETUJU'])->assertConflict()->assertJsonPath('code', 'pemisahan_tugas');
-    $this->mock(AuditService::class, fn ($mock) => $mock->shouldReceive('record')->andThrow(new RuntimeException('Audit gagal')));
-    $this->actingAs($f['actors']['KASUB'])->postJson($url, ['tahap' => 'KASUB', 'keputusan' => 'SETUJU'])->assertStatus(500);
+    $this->actingAs($f['actors']['ADMIN_SATKER'])->postJson($url, ['tahap' => 'SUPER_ADMIN', 'keputusan' => 'SETUJU'])->assertForbidden();
+    $this->actingAs($f['actors']['SUPER_ADMIN'])->postJson($url, ['tahap' => 'SUPER_ADMIN', 'keputusan' => 'SETUJU'])->assertConflict()->assertJsonPath('code', 'pemisahan_tugas');
+    DB::table('SOP_VERSI')->where('id', $f['sopVersion']->id)->update(['dibuat_oleh' => $f['actors']['STAFF']->id]);
+    $this->actingAs($f['actors']['SUPER_ADMIN'])->postJson($url, ['tahap' => 'SUPER_ADMIN', 'keputusan' => 'TOLAK'])->assertUnprocessable()->assertJsonValidationErrors(['catatan']);
+    $realAudit = new AuditService;
+    $this->mock(AuditService::class)->shouldReceive('record')->andReturnUsing(function (string $table, int $id, string $action, ?array $before = null, ?array $after = null, ?int $actor = null) use ($realAudit): void {
+        if ($action === 'APPROVE') {
+            throw new RuntimeException('Audit gagal');
+        }
+        $realAudit->record($table, $id, $action, $before, $after, $actor);
+    });
+    $this->actingAs($f['actors']['SUPER_ADMIN'])->postJson($url, ['tahap' => 'SUPER_ADMIN', 'keputusan' => 'SETUJU'])->assertStatus(500);
     $this->assertDatabaseCount('SOP_REVIEW', 0);
-    expect($f['sopVersion']->fresh()->status)->toBe('MENUNGGU_KASUB');
+    $this->assertDatabaseMissing('LOG_AUDIT', ['entitas' => 'SOP_VERSI', 'entitas_id' => $f['sopVersion']->id, 'aksi' => 'APPROVE']);
+    expect($f['sopVersion']->fresh()->status)->toBe('MENUNGGU_SUPER_ADMIN');
 });
 
 test('draft creation and deletion follow role matrix', function (string $role): void {
@@ -142,7 +187,8 @@ test('draft creation and deletion follow role matrix', function (string $role): 
     $this->actingAs($f['actors'][$role]);
     foreach (['kontrol-internal' => ['unit_pemilik_id' => $f['unit']->id, 'kode' => 'Baru', 'nama' => 'Kontrol', 'jenis' => 'TEKNIS', 'deskripsi' => 'Deskripsi'], 'sop' => ['unit_pemilik_id' => $f['unit']->id, 'kode' => 'SOP-BARU', 'judul' => 'Prosedur'], 'soa' => ['unit_id' => $f['unit']->id, 'periode_id' => $f['soa']->periode_id, 'standar_id' => $f['soa']->standar_id, 'ruang_lingkup' => 'Lingkup']] as $resource => $payload) {
         $response = $this->postJson('/api/'.$resource, $payload);
-        if (in_array($role, ['STAFF', 'ADMIN_SATKER'], true)) {
+        $staffRestricted = $role === 'STAFF' && in_array($resource, ['kontrol-internal', 'sop'], true);
+        if (in_array($role, ['STAFF', 'ADMIN_SATKER'], true) && ! $staffRestricted) {
             $response->assertCreated();
             $delete = $this->deleteJson('/api/'.$resource.'/'.$response->json('data.id'));
             if ($role === 'ADMIN_SATKER') {
@@ -153,6 +199,18 @@ test('draft creation and deletion follow role matrix', function (string $role): 
         } else {
             $response->assertForbidden();
         }
+    }
+    $sopResponse = $this->postJson('/api/sop/'.$f['sop']->id.'/versi', ['dokumen_versi_id' => $f['proof']->id, 'tanggal_berlaku' => '2026-10-13']);
+    if ($role === 'ADMIN_SATKER') {
+        $sopResponse->assertCreated();
+    } else {
+        $sopResponse->assertForbidden();
+    }
+    $soaResponse = $this->postJson('/api/soa/'.$f['soa']->id.'/versi');
+    if (in_array($role, ['STAFF', 'ADMIN_SATKER'], true)) {
+        $soaResponse->assertCreated();
+    } else {
+        $soaResponse->assertForbidden();
     }
 })->with(['SUPER_ADMIN', 'ADMIN_SATKER', 'STAFF', 'KASUB', 'KABID', 'KASATKER']);
 test('parent standard cannot change after versions and invalid sorts fail validation', function (): void {

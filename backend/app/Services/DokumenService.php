@@ -25,7 +25,13 @@ class DokumenService
     {
         Gate::forUser($actor)->authorize('dokumen.view');
 
-        return Dokumen::whereIn('unit_pemilik_id', $this->scope->ids($actor));
+        $units = $this->scope->isSuper($actor)
+            ? $this->scope->ids($actor)
+            : ($this->scope->hasRole($actor, ['ADMIN_SATKER'])
+                ? $this->scope->idsForRoles($actor, ['ADMIN_SATKER'])
+                : $this->scope->ids($actor));
+
+        return Dokumen::whereIn('unit_pemilik_id', $units);
     }
 
     public function versions(User $actor): Builder

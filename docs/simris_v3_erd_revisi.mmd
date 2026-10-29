@@ -24,6 +24,8 @@ erDiagram
         boolean aktif
     }
 
+    %% Catatan implementasi: kolom utama dipertahankan di database untuk detail internal
+    %% dan tidak menjadi input jalur Admin Satker; implementasi selalu menyimpan utama=true.
     %% [REVISI] Periode penempatan satu pegawai tidak boleh tumpang tindih (exclusion constraint/validasi service)
     PENEMPATAN_PEGAWAI {
         bigint id PK
@@ -65,7 +67,7 @@ erDiagram
         bigint user_id FK "Nullable untuk proses sistem"
         varchar entitas
         bigint entitas_id
-        varchar aksi "CREATE UPDATE DELETE LOGIN APPROVE"
+        varchar aksi "CREATE UPDATE DELETE LOGIN APPROVE REJECT ROLE_CHANGE PASSWORD_RESET"
         json data_lama "Nullable"
         json data_baru "Nullable"
         varchar ip_address

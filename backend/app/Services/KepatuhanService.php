@@ -40,7 +40,8 @@ class KepatuhanService
             $resource = $parent;
         }
         $class = self::MODELS[$resource];
-        $query = $class::whereIn($resource === 'soa' ? 'unit_id' : 'unit_pemilik_id', $this->scope->ids($actor));
+        $unitIds = $this->units($actor);
+        $query = $class::whereIn($resource === 'soa' ? 'unit_id' : 'unit_pemilik_id', $unitIds);
         foreach (array_reverse($chain) as [$child, $field]) {
             $query = $child::whereIn($field, $query->select('id'));
         }
@@ -96,9 +97,9 @@ class KepatuhanService
                     $unit = $this->unit($parentModel);
                 } else {
                     $unit = $id ? $this->unit($model) : (int) ($data['unit_id'] ?? $data['unit_pemilik_id']);
-                    UnitOrganisasi::whereIn('id', $this->scope->ids($actor))->findOrFail($unit);
+                    UnitOrganisasi::whereIn('id', $this->units($actor))->findOrFail($unit);
                 }
-                Gate::forUser($actor)->authorize('kepatuhan.write', [$unit, $delete]);
+                Gate::forUser($actor)->authorize('kepatuhan.write', [$unit, $delete, $resource]);
                 if ($id) {
                     $this->draft($model);
                 }
@@ -124,7 +125,7 @@ class KepatuhanService
                     $soa = Soa::findOrFail($version->soa_id);
                     Kontrol::where('standar_id', $soa->standar_id)->findOrFail($data['kontrol_id'] ?? $model->kontrol_id);
                     if (isset($data['penanggung_jawab_id'])) {
-                        Pegawai::where('aktif', true)->whereIn('id', DB::table('PENEMPATAN_PEGAWAI')->select('pegawai_id')->whereIn('unit_id', $this->scope->ids($actor))->where('mulai', '<=', today())->where(fn ($q) => $q->whereNull('selesai')->orWhere('selesai', '>=', today())))->findOrFail($data['penanggung_jawab_id']);
+                        Pegawai::where('aktif', true)->whereIn('id', DB::table('PENEMPATAN_PEGAWAI')->select('pegawai_id')->whereIn('unit_id', $this->units($actor))->where('mulai', '<=', today())->where(fn ($q) => $q->whereNull('selesai')->orWhere('selesai', '>=', today())))->findOrFail($data['penanggung_jawab_id']);
                     }
                 }
                 $model->fill($data)->save();
@@ -144,7 +145,7 @@ class KepatuhanService
             DB::table('ROLES')->where('kode', 'SUPER_ADMIN')->lockForUpdate()->first();
             $model = $this->query($resource, $actor)->whereKey($id)->lockForUpdate()->firstOrFail();
             $unit = $this->unit($model);
-            $transition = config('alur_kepatuhan.'.$model->status.'.'.$action);
+            $transition = config('alur_kepatuhan.'.$resource.'.'.$model->status.'.'.$action);
             if (! $transition) {
                 throw new BusinessRuleException('transisi_tidak_valid', 'Transisi review versi tidak tersedia.');
             }
@@ -152,6 +153,14 @@ class KepatuhanService
             $field = $resource === 'sop-versi' ? 'sop_versi_id' : 'soa_versi_id';
             if ($action === 'AJUKAN') {
                 Gate::forUser($actor)->authorize('kepatuhan.write', [$unit, true]);
+            } elseif ($resource === 'sop-versi') {
+                Gate::forUser($actor)->authorize('kepatuhan.review-sop');
+                if (($data['tahap'] ?? null) !== 'SUPER_ADMIN') {
+                    throw new BusinessRuleException('peninjau_sop_harus_super_admin', 'Hanya SUPER_ADMIN yang dapat meninjau dan mengesahkan SOP.');
+                }
+                if ($actor->id === $model->dibuat_oleh) {
+                    throw new BusinessRuleException('pemisahan_tugas', 'Pengaju SOP tidak dapat meninjau versinya sendiri.');
+                }
             } else {
                 app(ReviewScope::class)->authorize($actor, $unit, $transition['pelaku']);
                 if (($data['tahap'] ?? null) !== $transition['pelaku']) {
@@ -160,11 +169,11 @@ class KepatuhanService
                 if ($actor->id === $model->dibuat_oleh || ($transition['pelaku'] !== 'KASUB' && $reviewClass::where($field, $id)->where('reviewer_id', $actor->id)->where('tahap', 'KASUB')->exists())) {
                     throw new BusinessRuleException('pemisahan_tugas', 'Penyusun tidak dapat mereview sendiri dan Kasub tidak merangkap reviewer berikutnya.');
                 }
-                if ($action === 'TOLAK' && trim($data['catatan'] ?? '') === '') {
-                    throw new BusinessRuleException('catatan_wajib', 'Catatan penolakan wajib diisi.');
-                }
             }
-            if ($action !== 'TOLAK') {
+            if ($action === 'TOLAK' && trim($data['catatan'] ?? '') === '') {
+                throw new BusinessRuleException('catatan_wajib', 'Catatan penolakan wajib diisi.');
+            }
+            if ($action === 'SETUJU') {
                 if ($model instanceof SopVersi) {
                     $this->documents->finalVersion($model->dokumen_versi_id, $actor);
                 } else {
@@ -177,12 +186,14 @@ class KepatuhanService
                 }
             }
             $next = $transition['ke'];
-            $skip = config('alur_review.lewati.'.UnitOrganisasi::findOrFail($unit)->jenis, []);
-            if ($next === 'MENUNGGU_KASUB' && in_array('KASUB', $skip, true)) {
-                $next = 'MENUNGGU_KABID';
-            }
-            if ($next === 'MENUNGGU_KABID' && in_array('KABID', $skip, true)) {
-                $next = 'MENUNGGU_KASATKER';
+            if ($model instanceof SoaVersi) {
+                $skip = config('alur_review.lewati.'.UnitOrganisasi::findOrFail($unit)->jenis, []);
+                if ($next === 'MENUNGGU_KASUB' && in_array('KASUB', $skip, true)) {
+                    $next = 'MENUNGGU_KABID';
+                }
+                if ($next === 'MENUNGGU_KABID' && in_array('KABID', $skip, true)) {
+                    $next = 'MENUNGGU_KASATKER';
+                }
             }
             if ($action !== 'AJUKAN') {
                 $reviewClass::create([$field => $id, 'reviewer_id' => $actor->id, 'tahap' => $transition['pelaku'], 'keputusan' => $action, 'catatan' => $data['catatan'] ?? '', 'waktu' => now()]);
@@ -201,5 +212,15 @@ class KepatuhanService
 
             return $model;
         });
+    }
+
+    /** Wilayah admin satker tidak mengambil cakupan dari role lain pada akun yang sama. */
+    private function units(User $actor): array
+    {
+        return $this->scope->isSuper($actor)
+            ? $this->scope->ids($actor)
+            : ($this->scope->hasRole($actor, ['ADMIN_SATKER'])
+                ? $this->scope->idsForRoles($actor, ['ADMIN_SATKER'])
+                : $this->scope->ids($actor));
     }
 }

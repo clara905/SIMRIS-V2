@@ -47,7 +47,7 @@ class TautanKepatuhanService
         $service = app(KepatuhanService::class);
         $model = $service->query($resource, $actor)->findOrFail($id);
         if ($write) {
-            Gate::forUser($actor)->authorize('kepatuhan.write', [$service->unit($model)]);
+            Gate::forUser($actor)->authorize('kepatuhan.write', [$service->unit($model), false, $resource]);
             $service->draft($model);
         }
 

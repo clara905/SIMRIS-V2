@@ -1,0 +1,540 @@
+﻿diff --git a/backend/app/Http/Requests/AdminRequest.php b/backend/app/Http/Requests/AdminRequest.php
+index cc8abfd..70d0c3a 100644
+--- a/backend/app/Http/Requests/AdminRequest.php
++++ b/backend/app/Http/Requests/AdminRequest.php
+@@ -31,6 +31,9 @@ public function messages(): array
+         return [
+             ...parent::messages(),
+             'nip.unique' => 'NIP sudah terdaftar. Hubungi super admin untuk proses mutasi.',
++            'kode.unique' => 'Kode sudah digunakan.',
++            'username.unique' => 'Username sudah digunakan.',
++            'email_login.unique' => 'Email login sudah digunakan.',
+         ];
+     }
+ 
+@@ -58,10 +61,10 @@ public function rules(): array
+ 
+         return match ($resource) {
+             'users' => ['pegawai_id' => [$satkerAdmin && $this->isMethod('POST') ? 'required' : 'sometimes', 'nullable', 'integer', Rule::exists('PEGAWAI', 'id'), $unique('USERS', 'pegawai_id')], 'username' => [$required, 'string', 'max:255', 'regex:/^[A-Za-z0-9._-]+$/', $unique('USERS', 'username')], 'email_login' => [$required, 'email', 'max:255', $unique('USERS', 'email_login')], 'password' => $this->isMethod('POST') ? ['required', 'string', 'min:12', 'max:255', 'confirmed'] : ['prohibited'], 'aktif' => ['sometimes', 'boolean'], 'wajib_ganti_password' => ['prohibited'], 'password_hash' => ['prohibited']],
+-            'user-role-scope' => ['user_id' => [$required, 'integer', Rule::exists('USERS', 'id')], 'role_id' => [$required, 'integer', Rule::exists('ROLES', 'id')], 'unit_id' => ['sometimes', 'nullable', 'integer', Rule::exists('UNIT_ORGANISASI', 'id')], 'mulai' => [$required, 'date'], 'selesai' => ['sometimes', 'nullable', 'date']],
++            'user-role-scope' => ['user_id' => [$required, 'integer', Rule::exists('USERS', 'id')], 'role_id' => [$required, 'integer', Rule::exists('ROLES', 'id')], 'unit_id' => [$satkerAdmin ? 'required' : 'sometimes', $satkerAdmin ? 'integer' : 'nullable', Rule::exists('UNIT_ORGANISASI', 'id')], 'mulai' => [$required, 'date'], 'selesai' => ['sometimes', 'nullable', 'date']],
+             'unit-organisasi' => ['parent_id' => ['sometimes', 'nullable', 'integer', Rule::exists('UNIT_ORGANISASI', 'id')], 'kode' => [$required, 'string', 'max:255', $unique('UNIT_ORGANISASI', 'kode')], 'nama' => [$required, 'string', 'max:255'], 'jenis' => [$required, Rule::in(array_keys(config('aturan_unit')))], 'aktif' => ['sometimes', 'boolean']],
+             'pegawai' => ['nip' => ['sometimes', 'nullable', 'regex:/^[0-9]{18}$/', $unique('PEGAWAI', 'nip')], 'nama' => [$required, 'string', 'max:255'], 'email_kontak' => [$required, 'email', 'max:255'], 'jenis_kepegawaian' => [$required, 'string', 'max:255'], 'aktif' => ['sometimes', 'boolean']],
+-            'penempatan-pegawai' => ['pegawai_id' => [$required, 'integer', Rule::exists('PEGAWAI', 'id')], 'unit_id' => [$required, 'integer', Rule::exists('UNIT_ORGANISASI', 'id')], 'mulai' => [$required, 'date_format:Y-m-d'], 'selesai' => ['sometimes', 'nullable', 'date_format:Y-m-d'], 'utama' => ['sometimes', 'boolean']],
++            'penempatan-pegawai' => ['pegawai_id' => [$required, 'integer', Rule::exists('PEGAWAI', 'id')], 'unit_id' => [$required, 'integer', Rule::exists('UNIT_ORGANISASI', 'id')], 'mulai' => [$required, 'date_format:Y-m-d'], 'selesai' => ['sometimes', 'nullable', 'date_format:Y-m-d'], 'utama' => $satkerAdmin ? ['prohibited'] : ['sometimes', 'boolean']],
+             'periode-penilaian' => ['nama' => [$required, 'string', 'max:255'], 'tanggal_mulai' => [$required, 'date_format:Y-m-d'], 'tanggal_selesai' => [$required, 'date_format:Y-m-d']],
+             'rencana-kerja' => ['kode' => [$required, 'string', 'max:255', $unique('RENCANA_KERJA', 'kode')], 'uraian_template' => [$required, 'string', 'max:10000']],
+             default => [],
+diff --git a/backend/app/Http/Requests/KepatuhanRequest.php b/backend/app/Http/Requests/KepatuhanRequest.php
+index d0653cb..90e9c2e 100644
+--- a/backend/app/Http/Requests/KepatuhanRequest.php
++++ b/backend/app/Http/Requests/KepatuhanRequest.php
+@@ -27,6 +27,9 @@ public function authorize(): bool
+         } elseif ($this->route('parent')) {
+             $model = $service->query(KepatuhanService::PARENTS[$resource][0], $actor)->findOrFail($this->route('parent'));
+         }
++        if ($resource === 'sop-versi' && $this->route('action') === 'review') {
++            Gate::forUser($actor)->authorize('kepatuhan.review-sop');
++        }
+         if (! $this->isMethod('GET') && $this->route('action') !== 'review') {
+             $admin = $this->isMethod('DELETE') || $this->route('action') === 'ajukan';
+             if ($model) {
+@@ -57,7 +60,9 @@ public function rules(): array
+             return [];
+         }
+         if ($this->route('action') === 'review') {
+-            return ['tahap' => ['required', Rule::in(['KASUB', 'KABID', 'KASATKER'])], 'keputusan' => ['required', Rule::in(['SETUJU', 'TOLAK'])], 'catatan' => ['sometimes', 'nullable', 'string', 'max:10000']];
++            $tahapan = $this->route('resource') === 'sop-versi' ? ['SUPER_ADMIN'] : ['KASUB', 'KABID', 'KASATKER'];
++
++            return ['tahap' => ['required', Rule::in($tahapan)], 'keputusan' => ['required', Rule::in(['SETUJU', 'TOLAK'])], 'catatan' => ['sometimes', 'nullable', 'string', 'max:10000']];
+         }
+         $required = $this->isMethod('POST') ? 'required' : 'sometimes';
+         $text = [$required, 'string', 'max:10000'];
+diff --git a/backend/app/Models/Concerns/Auditable.php b/backend/app/Models/Concerns/Auditable.php
+index e8a79d5..23675d2 100644
+--- a/backend/app/Models/Concerns/Auditable.php
++++ b/backend/app/Models/Concerns/Auditable.php
+@@ -9,9 +9,21 @@ trait Auditable
+ {
+     public static function bootAuditable(): void
+     {
+-        static::created(fn ($model) => app(AuditService::class)->record($model->getTable(), (int) $model->getKey(), 'CREATE', null, $model->getAttributes()));
+-        static::updated(fn ($model) => app(AuditService::class)->record($model->getTable(), (int) $model->getKey(), 'UPDATE', $model->getRawOriginal(), $model->getAttributes()));
+-        static::deleted(fn ($model) => app(AuditService::class)->record($model->getTable(), (int) $model->getKey(), 'DELETE', $model->getAttributes()));
++        static::created(function ($model): void {
++            if (! property_exists($model, 'suppressAutomaticAudit') || ! $model->suppressAutomaticAudit) {
++                app(AuditService::class)->record($model->getTable(), (int) $model->getKey(), 'CREATE', null, $model->getAttributes());
++            }
++        });
++        static::updated(function ($model): void {
++            if (! property_exists($model, 'suppressAutomaticAudit') || ! $model->suppressAutomaticAudit) {
++                app(AuditService::class)->record($model->getTable(), (int) $model->getKey(), 'UPDATE', $model->getRawOriginal(), $model->getAttributes());
++            }
++        });
++        static::deleted(function ($model): void {
++            if (! property_exists($model, 'suppressAutomaticAudit') || ! $model->suppressAutomaticAudit) {
++                app(AuditService::class)->record($model->getTable(), (int) $model->getKey(), 'DELETE', $model->getAttributes());
++            }
++        });
+     }
+ 
+     public function save(array $options = []): bool
+diff --git a/backend/app/Models/UserRoleScope.php b/backend/app/Models/UserRoleScope.php
+index 7221c70..927b543 100644
+--- a/backend/app/Models/UserRoleScope.php
++++ b/backend/app/Models/UserRoleScope.php
+@@ -12,6 +12,9 @@ class UserRoleScope extends Model
+ {
+     use Auditable, SerializesLocalDates;
+ 
++    /** Admin satker menulis audit berpenanda secara eksplisit dari AdminService. */
++    public bool $suppressAutomaticAudit = false;
++
+     /** @use HasFactory<UserRoleScopeFactory> */
+     use HasFactory;
+ 
+diff --git a/backend/app/Policies/KepatuhanPolicy.php b/backend/app/Policies/KepatuhanPolicy.php
+index bd23ef2..5733056 100644
+--- a/backend/app/Policies/KepatuhanPolicy.php
++++ b/backend/app/Policies/KepatuhanPolicy.php
+@@ -14,4 +14,11 @@ public function write(User $actor, int $unit, bool $adminOnly = false): Response
+     {
+         return in_array($unit, $this->scope->idsForRoles($actor, $adminOnly ? ['ADMIN_SATKER'] : ['ADMIN_SATKER', 'STAFF']), true) ? Response::allow() : Response::deny('Hanya penyusun dalam scope dapat mengubah draft; pengajuan dan penghapusan memerlukan ADMIN_SATKER.');
+     }
++
++    public function reviewSop(User $actor): Response
++    {
++        return $this->scope->isSuper($actor)
++            ? Response::allow()
++            : Response::deny('Hanya SUPER_ADMIN yang dapat meninjau dan mengesahkan SOP.');
++    }
+ }
+diff --git a/backend/app/Services/AdminService.php b/backend/app/Services/AdminService.php
+index d908a26..6444254 100644
+--- a/backend/app/Services/AdminService.php
++++ b/backend/app/Services/AdminService.php
+@@ -150,13 +150,24 @@ public function mutate(string $resource, ?int $id, array $data, string $action,
+                         throw new BusinessRuleException('rentang_tanggal_tidak_valid', 'Tanggal selesai tidak boleh sebelum tanggal mulai.');
+                     }
+                 }
++                $satkerRoleAudit = $resource === 'user-role-scope' && ! $this->scope->isSuper($actor);
++                if ($satkerRoleAudit) {
++                    $model->suppressAutomaticAudit = true;
++                }
+                 if ($action === 'delete') {
+                     $model->delete();
+                 } elseif ($resource === 'penempatan-pegawai') {
++                    if (! $this->scope->isSuper($actor)) {
++                        // Kolom implementasi utama tidak dikendalikan klien Admin Satker.
++                        $data['utama'] = true;
++                    }
+                     $model = $this->penempatan->save($data, $id ? $model : null);
+                 } else {
+                     $model->fill($data)->save();
+                 }
++                if ($satkerRoleAudit) {
++                    $model->suppressAutomaticAudit = false;
++                }
+                 if (in_array($resource, ['users', 'user-role-scope'], true)) {
+                     $this->assertSuperAdminRemains();
+                 }
+@@ -164,14 +175,17 @@ public function mutate(string $resource, ?int $id, array $data, string $action,
+                     $after = $action === 'delete' ? null : $model->getAttributes();
+                     if (! $this->scope->isSuper($actor)) {
+                         $roleCode = $action === 'delete' ? Role::find($before['role_id'])?->kode : Role::find($model->role_id)?->kode;
+-                        $marker = ['oleh_admin_satker' => true, 'role' => $roleCode];
++                        $marker = ['oleh_admin_satker' => true, 'peran' => $roleCode];
+                         if ($roleCode === 'KASATKER') {
+-                            $marker['perubahan_kasatker'] = true;
++                            $marker['penanda'] = $action === 'delete' ? 'KASATKER_DICABUT' : 'KASATKER_DIBERIKAN';
+                         }
+                         $before = [...$before, ...$marker];
+-                        $after = $after === null ? null : [...$after, ...$marker];
++                        $after = [...($after ?? []), ...$marker];
++                        $auditAction = $action === 'delete' ? 'DELETE' : ($id ? 'UPDATE' : 'CREATE');
++                    } else {
++                        $auditAction = 'ROLE_CHANGE';
+                     }
+-                    $this->audit->record($model->getTable(), (int) $model->id, 'ROLE_CHANGE', $before, $after);
++                    $this->audit->record($model->getTable(), (int) $model->id, $auditAction, $before, $after);
+                 }
+                 if ($action === 'reset-password') {
+                     $this->audit->record('USERS', (int) $model->id, 'PASSWORD_RESET');
+diff --git a/backend/app/Services/AsetService.php b/backend/app/Services/AsetService.php
+index ed090d1..e2eb185 100644
+--- a/backend/app/Services/AsetService.php
++++ b/backend/app/Services/AsetService.php
+@@ -22,7 +22,7 @@ public function query(User $actor): Builder
+     {
+         Gate::forUser($actor)->authorize('aset.view');
+ 
+-        $units = $this->scope->ids($actor);
++        $units = $this->units($actor);
+ 
+         return Aset::whereIn('unit_pemilik_id', $units);
+     }
+@@ -61,7 +61,7 @@ public function update(int $id, array $data, User $actor, bool $assigned = false
+             $asset = $this->query($actor)->whereKey($id)->lockForUpdate()->firstOrFail();
+             Gate::forUser($actor->refresh())->authorize('aset.write', [(int) $asset->unit_pemilik_id]);
+             if (isset($data['unit_pemilik_id'])) {
+-                $unit = UnitOrganisasi::whereIn('id', $this->scope->idsForRoles($actor, ['ADMIN_SATKER']))->findOrFail($data['unit_pemilik_id']);
++                $unit = UnitOrganisasi::whereIn('id', $this->units($actor))->findOrFail($data['unit_pemilik_id']);
+                 if (! $unit->aktif) {
+                     throw new BusinessRuleException('unit_tidak_aktif', 'Unit pemilik harus aktif.');
+                 }
+@@ -95,16 +95,35 @@ public function assignment(?int $id, array $data, User $actor, bool $delete = fa
+             $model->fill($data);
+             $asset = $this->query($actor)->findOrFail($model->aset_id);
+             Gate::forUser($actor)->authorize('aset.write', [(int) $asset->unit_pemilik_id]);
+-            $pegawai = Pegawai::whereIn('id', DB::table('PENEMPATAN_PEGAWAI')->select('pegawai_id')->whereIn('unit_id', $this->scope->idsForRoles($actor, ['ADMIN_SATKER']))->where('mulai', '<=', today())->where(fn ($q) => $q->whereNull('selesai')->orWhere('selesai', '>=', today())))->findOrFail($model->pegawai_id);
++            $pegawai = Pegawai::whereIn('id', DB::table('PENEMPATAN_PEGAWAI')->select('pegawai_id')->whereIn('unit_id', $this->units($actor))->where('mulai', '<=', today())->where(fn ($q) => $q->whereNull('selesai')->orWhere('selesai', '>=', today())))->findOrFail($model->pegawai_id);
+             if (! $pegawai->aktif) {
+                 throw new BusinessRuleException('pegawai_tidak_aktif', 'Pegawai penugasan harus aktif.');
+             }
+             if ($model->selesai && $model->selesai->lt($model->mulai)) {
+                 throw new BusinessRuleException('rentang_tidak_valid', 'Selesai tidak boleh sebelum mulai.');
+             }
++            $overlap = PenugasanAset::where('aset_id', $model->aset_id)
++                ->where('jenis_tanggung_jawab', $model->jenis_tanggung_jawab)
++                ->when($id, fn ($q) => $q->where('id', '!=', $id))
++                ->where(fn ($q) => $q->whereNull('selesai')->orWhereDate('selesai', '>=', $model->mulai->toDateString()))
++                ->when($model->selesai, fn ($q) => $q->whereDate('mulai', '<=', $model->selesai->toDateString()))
++                ->lockForUpdate()->exists();
++            if ($overlap) {
++                throw new BusinessRuleException('penugasan_tumpang_tindih', 'Periode penugasan aset untuk jenis tanggung jawab yang sama tidak boleh tumpang tindih.');
++            }
+             $model->save();
+ 
+             return $model;
+         });
+     }
++
++    /** Wilayah admin satker selalu berasal dari role ADMIN_SATKER aktif. */
++    private function units(User $actor): array
++    {
++        return $this->scope->isSuper($actor)
++            ? $this->scope->ids($actor)
++            : ($this->scope->hasRole($actor, ['ADMIN_SATKER'])
++                ? $this->scope->idsForRoles($actor, ['ADMIN_SATKER'])
++                : $this->scope->ids($actor));
++    }
+ }
+diff --git a/backend/app/Services/DokumenService.php b/backend/app/Services/DokumenService.php
+index e333159..c56d1ec 100644
+--- a/backend/app/Services/DokumenService.php
++++ b/backend/app/Services/DokumenService.php
+@@ -25,7 +25,13 @@ public function documents(User $actor): Builder
+     {
+         Gate::forUser($actor)->authorize('dokumen.view');
+ 
+-        return Dokumen::whereIn('unit_pemilik_id', $this->scope->ids($actor));
++        $units = $this->scope->isSuper($actor)
++            ? $this->scope->ids($actor)
++            : ($this->scope->hasRole($actor, ['ADMIN_SATKER'])
++                ? $this->scope->idsForRoles($actor, ['ADMIN_SATKER'])
++                : $this->scope->ids($actor));
++
++        return Dokumen::whereIn('unit_pemilik_id', $units);
+     }
+ 
+     public function versions(User $actor): Builder
+diff --git a/backend/app/Services/KepatuhanService.php b/backend/app/Services/KepatuhanService.php
+index 2e1667a..2048b69 100644
+--- a/backend/app/Services/KepatuhanService.php
++++ b/backend/app/Services/KepatuhanService.php
+@@ -40,7 +40,8 @@ public function query(string $resource, User $actor): Builder
+             $resource = $parent;
+         }
+         $class = self::MODELS[$resource];
+-        $query = $class::whereIn($resource === 'soa' ? 'unit_id' : 'unit_pemilik_id', $this->scope->ids($actor));
++        $unitIds = $this->units($actor);
++        $query = $class::whereIn($resource === 'soa' ? 'unit_id' : 'unit_pemilik_id', $unitIds);
+         foreach (array_reverse($chain) as [$child, $field]) {
+             $query = $child::whereIn($field, $query->select('id'));
+         }
+@@ -96,7 +97,7 @@ public function mutate(string $resource, ?int $id, ?int $parentId, array $data,
+                     $unit = $this->unit($parentModel);
+                 } else {
+                     $unit = $id ? $this->unit($model) : (int) ($data['unit_id'] ?? $data['unit_pemilik_id']);
+-                    UnitOrganisasi::whereIn('id', $this->scope->ids($actor))->findOrFail($unit);
++                    UnitOrganisasi::whereIn('id', $this->units($actor))->findOrFail($unit);
+                 }
+                 Gate::forUser($actor)->authorize('kepatuhan.write', [$unit, $delete]);
+                 if ($id) {
+@@ -124,7 +125,7 @@ public function mutate(string $resource, ?int $id, ?int $parentId, array $data,
+                     $soa = Soa::findOrFail($version->soa_id);
+                     Kontrol::where('standar_id', $soa->standar_id)->findOrFail($data['kontrol_id'] ?? $model->kontrol_id);
+                     if (isset($data['penanggung_jawab_id'])) {
+-                        Pegawai::where('aktif', true)->whereIn('id', DB::table('PENEMPATAN_PEGAWAI')->select('pegawai_id')->whereIn('unit_id', $this->scope->ids($actor))->where('mulai', '<=', today())->where(fn ($q) => $q->whereNull('selesai')->orWhere('selesai', '>=', today())))->findOrFail($data['penanggung_jawab_id']);
++                        Pegawai::where('aktif', true)->whereIn('id', DB::table('PENEMPATAN_PEGAWAI')->select('pegawai_id')->whereIn('unit_id', $this->units($actor))->where('mulai', '<=', today())->where(fn ($q) => $q->whereNull('selesai')->orWhere('selesai', '>=', today())))->findOrFail($data['penanggung_jawab_id']);
+                     }
+                 }
+                 $model->fill($data)->save();
+@@ -152,6 +153,14 @@ public function review(string $resource, int $id, string $action, array $data, U
+             $field = $resource === 'sop-versi' ? 'sop_versi_id' : 'soa_versi_id';
+             if ($action === 'AJUKAN') {
+                 Gate::forUser($actor)->authorize('kepatuhan.write', [$unit, true]);
++            } elseif ($resource === 'sop-versi') {
++                Gate::forUser($actor)->authorize('kepatuhan.review-sop');
++                if (($data['tahap'] ?? null) !== 'SUPER_ADMIN') {
++                    throw new BusinessRuleException('peninjau_sop_harus_super_admin', 'Hanya SUPER_ADMIN yang dapat meninjau dan mengesahkan SOP.');
++                }
++                if ($actor->id === $model->dibuat_oleh) {
++                    throw new BusinessRuleException('pemisahan_tugas', 'Pengaju SOP tidak dapat meninjau versinya sendiri.');
++                }
+             } else {
+                 app(ReviewScope::class)->authorize($actor, $unit, $transition['pelaku']);
+                 if (($data['tahap'] ?? null) !== $transition['pelaku']) {
+@@ -202,4 +211,14 @@ public function review(string $resource, int $id, string $action, array $data, U
+             return $model;
+         });
+     }
++
++    /** Wilayah admin satker tidak mengambil cakupan dari role lain pada akun yang sama. */
++    private function units(User $actor): array
++    {
++        return $this->scope->isSuper($actor)
++            ? $this->scope->ids($actor)
++            : ($this->scope->hasRole($actor, ['ADMIN_SATKER'])
++                ? $this->scope->idsForRoles($actor, ['ADMIN_SATKER'])
++                : $this->scope->ids($actor));
++    }
+ }
+diff --git a/backend/app/Services/PenempatanService.php b/backend/app/Services/PenempatanService.php
+index 1392688..a8cee12 100644
+--- a/backend/app/Services/PenempatanService.php
++++ b/backend/app/Services/PenempatanService.php
+@@ -24,14 +24,15 @@ public function save(array $data, ?PenempatanPegawai $record = null): Penempatan
+         if ($values['selesai'] && Carbon::parse($values['selesai'])->lt(Carbon::parse($values['mulai']))) {
+             throw new BusinessRuleException('rentang_tanggal_tidak_valid', 'Tanggal selesai tidak boleh sebelum mulai.');
+         }
+-        if ($values['utama'] && ! $values['selesai']) {
+-            $previous = PenempatanPegawai::where('pegawai_id', $pegawai->id)->where('utama', true)->whereNull('selesai')->when($record, fn ($q) => $q->where('id', '!=', $record->id))->lockForUpdate()->first();
+-            if ($previous) {
+-                if (Carbon::parse($values['mulai'])->lte($previous->mulai)) {
+-                    throw new BusinessRuleException('mulai_penempatan_tidak_valid', 'Penempatan baru harus mulai setelah penempatan utama sebelumnya.');
+-                }
+-                $previous->update(['selesai' => Carbon::parse($values['mulai'])->subDay()->toDateString()]);
+-            }
++        $mulai = Carbon::parse($values['mulai'])->startOfDay();
++        $selesai = isset($values['selesai']) ? Carbon::parse($values['selesai'])->startOfDay() : null;
++        $overlap = PenempatanPegawai::where('pegawai_id', $pegawai->id)
++            ->when($record, fn ($q) => $q->where('id', '!=', $record->id))
++            ->where(fn ($q) => $q->whereNull('selesai')->orWhereDate('selesai', '>=', $mulai->toDateString()))
++            ->when($selesai, fn ($q) => $q->whereDate('mulai', '<=', $selesai->toDateString()))
++            ->lockForUpdate()->exists();
++        if ($overlap) {
++            throw new BusinessRuleException('penempatan_tumpang_tindih', 'Periode penempatan pegawai tidak boleh tumpang tindih. Akhiri penempatan lama sebelum membuat penempatan baru.');
+         }
+         $record ??= new PenempatanPegawai;
+         $record->fill($data)->save();
+diff --git a/backend/app/Services/ScopeUnit.php b/backend/app/Services/ScopeUnit.php
+index aa8d317..c31cb99 100644
+--- a/backend/app/Services/ScopeUnit.php
++++ b/backend/app/Services/ScopeUnit.php
+@@ -33,7 +33,13 @@ public function ids(User $user): array
+         $ids = [];
+         if ($user->aktif) {
+             $units = DB::table('UNIT_ORGANISASI')->get(['id', 'parent_id']);
+-            $ids = $this->isSuper($user) ? $units->pluck('id')->map(fn ($id) => (int) $id)->all() : $this->roles($user)->whereNotNull('unit_id')->pluck('unit_id')->map(fn ($id) => (int) $id)->unique()->values()->all();
++            $activeRoles = $this->roles($user);
++            $baseRoles = $this->isSuper($user)
++                ? $activeRoles
++                : ($activeRoles->contains(fn ($role) => $role->kode === 'ADMIN_SATKER')
++                    ? $activeRoles->where('kode', 'ADMIN_SATKER')
++                    : $activeRoles);
++            $ids = $this->isSuper($user) ? $units->pluck('id')->map(fn ($id) => (int) $id)->all() : $baseRoles->whereNotNull('unit_id')->pluck('unit_id')->map(fn ($id) => (int) $id)->unique()->values()->all();
+             do {
+                 $before = count($ids);
+                 foreach ($units as $unit) {
+diff --git a/backend/config/alur_kepatuhan.php b/backend/config/alur_kepatuhan.php
+index fce140b..1df44a0 100644
+--- a/backend/config/alur_kepatuhan.php
++++ b/backend/config/alur_kepatuhan.php
+@@ -1,8 +1,6 @@
+ <?php
+ 
+ return [
+-    'DRAFT' => ['AJUKAN' => ['pelaku' => 'ADMIN_SATKER', 'ke' => 'MENUNGGU_KASUB']],
+-    'MENUNGGU_KASUB' => ['SETUJU' => ['pelaku' => 'KASUB', 'ke' => 'MENUNGGU_KABID'], 'TOLAK' => ['pelaku' => 'KASUB', 'ke' => 'DITOLAK']],
+-    'MENUNGGU_KABID' => ['SETUJU' => ['pelaku' => 'KABID', 'ke' => 'MENUNGGU_KASATKER'], 'TOLAK' => ['pelaku' => 'KABID', 'ke' => 'DITOLAK']],
+-    'MENUNGGU_KASATKER' => ['SETUJU' => ['pelaku' => 'KASATKER', 'ke' => 'DISAHKAN'], 'TOLAK' => ['pelaku' => 'KASATKER', 'ke' => 'DITOLAK']],
++    'DRAFT' => ['AJUKAN' => ['pelaku' => 'ADMIN_SATKER', 'ke' => 'MENUNGGU_SUPER_ADMIN']],
++    'MENUNGGU_SUPER_ADMIN' => ['SETUJU' => ['pelaku' => 'SUPER_ADMIN', 'ke' => 'DISAHKAN'], 'TOLAK' => ['pelaku' => 'SUPER_ADMIN', 'ke' => 'DITOLAK']],
+ ];
+diff --git a/backend/tests/Feature/AdminSatkerAdministrationTest.php b/backend/tests/Feature/AdminSatkerAdministrationTest.php
+index a2e9e81..24579c7 100644
+--- a/backend/tests/Feature/AdminSatkerAdministrationTest.php
++++ b/backend/tests/Feature/AdminSatkerAdministrationTest.php
+@@ -75,12 +75,21 @@ function satkerUserPayload(string $username, int $pegawaiId): array
+         'mulai' => today()->toDateString(),
+     ])->assertCreated()->json('data.id');
+ 
+-    $audit = DB::table('LOG_AUDIT')->where('entitas', 'USER_ROLE_SCOPE')->where('entitas_id', $scopeId)->where('aksi', 'ROLE_CHANGE')->first();
+-    $expectedAudit = ['oleh_admin_satker' => true, 'role' => $code];
++    $audit = DB::table('LOG_AUDIT')->where('entitas', 'USER_ROLE_SCOPE')->where('entitas_id', $scopeId)->where('aksi', 'CREATE')->first();
++    $expectedAudit = ['oleh_admin_satker' => true, 'peran' => $code];
+     if ($code === 'KASATKER') {
+-        $expectedAudit['perubahan_kasatker'] = true;
++        $expectedAudit['penanda'] = 'KASATKER_DIBERIKAN';
+     }
+     expect(json_decode($audit->data_baru, true))->toMatchArray($expectedAudit);
++    if ($code === 'KASATKER') {
++        satkerAdminSession($admin)->deleteJson('/api/user-role-scope/'.$scopeId)->assertOk();
++        $revokeAudit = DB::table('LOG_AUDIT')->where('entitas', 'USER_ROLE_SCOPE')->where('entitas_id', $scopeId)->where('aksi', 'DELETE')->first();
++        expect(json_decode($revokeAudit->data_baru, true))->toMatchArray([
++            'oleh_admin_satker' => true,
++            'peran' => 'KASATKER',
++            'penanda' => 'KASATKER_DICABUT',
++        ]);
++    }
+ })->with(['STAFF', 'KASUB', 'KABID', 'KASATKER']);
+ 
+ test('admin satker cannot grant privileged roles or roles outside its unit scope', function (): void {
+@@ -100,6 +109,13 @@ function satkerUserPayload(string $username, int $pegawaiId): array
+     }
+ 
+     $outside = UnitOrganisasi::factory()->create(['jenis' => 'SATKER', 'parent_id' => null]);
++    satkerAdminSession($admin)->postJson('/api/user-role-scope', [
++        'user_id' => $target->id,
++        'role_id' => Role::where('kode', 'STAFF')->value('id'),
++        'unit_id' => null,
++        'mulai' => today()->toDateString(),
++    ])->assertUnprocessable()->assertJsonValidationErrors(['unit_id']);
++
+     satkerAdminSession($admin)->postJson('/api/user-role-scope', [
+         'user_id' => $target->id,
+         'role_id' => Role::where('kode', 'STAFF')->value('id'),
+@@ -185,6 +201,13 @@ function satkerUserPayload(string $username, int $pegawaiId): array
+ 
+     // 5. Ditolak memindahkan unit anak ke luar wilayah atau ke null
+     $otherRoot = UnitOrganisasi::factory()->create(['jenis' => 'SATKER', 'parent_id' => null]);
++    UnitOrganisasi::factory()->create(['jenis' => 'SATKER', 'parent_id' => null, 'kode' => 'RAHASIA-SATKER-B']);
++    satkerAdminSession($admin)->postJson('/api/unit-organisasi', [
++        'parent_id' => $root->id,
++        'kode' => 'RAHASIA-SATKER-B',
++        'nama' => 'Unit uji kode global',
++        'jenis' => 'BIDANG',
++    ])->assertUnprocessable()->assertJsonPath('errors.kode.0', 'Kode sudah digunakan.');
+     $resNull = satkerAdminSession($admin)->postJson('/api/unit-organisasi/'.$bidang['id'].'/pindah-induk', ['parent_id' => null]);
+     $resNull->assertConflict();
+     expect(in_array($resNull->json('code'), ['induk_di_luar_scope', 'level_unit_tidak_valid'], true))->toBeTrue();
+@@ -258,6 +281,25 @@ function satkerUserPayload(string $username, int $pegawaiId): array
+     satkerAdminSession($admin)->patchJson('/api/penempatan-pegawai/'.$penempatan['id'], [
+         'selesai' => today()->toDateString(),
+     ])->assertOk()->assertJsonPath('data.selesai', today()->toDateString());
++
++    $sub = UnitOrganisasi::factory()->create(['jenis' => 'BIDANG', 'parent_id' => $root->id]);
++    $newPlacement = satkerAdminSession($admin)->postJson('/api/penempatan-pegawai', [
++        'pegawai_id' => $localPegawai->id,
++        'unit_id' => $sub->id,
++        'mulai' => today()->addDay()->toDateString(),
++    ])->assertCreated()->json('data');
++    expect($newPlacement['utama'])->toBeTrue();
++    satkerAdminSession($admin)->postJson('/api/penempatan-pegawai', [
++        'pegawai_id' => $localPegawai->id,
++        'unit_id' => $sub->id,
++        'mulai' => today()->addDay()->toDateString(),
++        'utama' => false,
++    ])->assertUnprocessable()->assertJsonValidationErrors(['utama']);
++    satkerAdminSession($admin)->postJson('/api/penempatan-pegawai', [
++        'pegawai_id' => $localPegawai->id,
++        'unit_id' => $root->id,
++        'mulai' => today()->addDay()->toDateString(),
++    ])->assertConflict()->assertJsonPath('code', 'penempatan_tumpang_tindih');
+ });
+ 
+ test('duplicate employee NIP validation message does not leak other satker information', function (): void {
+diff --git a/backend/tests/Feature/KatalogAsetTest.php b/backend/tests/Feature/KatalogAsetTest.php
+index 98d1c20..66bcf13 100644
+--- a/backend/tests/Feature/KatalogAsetTest.php
++++ b/backend/tests/Feature/KatalogAsetTest.php
+@@ -158,6 +158,8 @@ function asetFixture(): array
+     $id = $this->actingAs($user)->postJson('/api/penugasan-aset', ['aset_id' => $asset->id, 'pegawai_id' => $employee->id, 'jenis_tanggung_jawab' => 'PIC', 'mulai' => '2026-01-01'])->assertCreated()->json('data.id');
+     $this->patchJson('/api/penugasan-aset/'.$id, ['selesai' => '2025-01-01'])->assertConflict();
+     $this->patchJson('/api/penugasan-aset/'.$id, ['selesai' => '2026-12-31'])->assertOk();
++    $this->postJson('/api/penugasan-aset', ['aset_id' => $asset->id, 'pegawai_id' => $employee->id, 'jenis_tanggung_jawab' => 'PIC', 'mulai' => '2026-06-01'])
++        ->assertConflict()->assertJsonPath('code', 'penugasan_tumpang_tindih');
+     $this->deleteJson('/api/penugasan-aset/'.$id)->assertOk();
+     $this->assertDatabaseMissing('PENUGASAN_ASET', ['id' => $id]);
+ });
+diff --git a/backend/tests/Feature/KepatuhanTest.php b/backend/tests/Feature/KepatuhanTest.php
+index 3c0ecc6..0a3a589 100644
+--- a/backend/tests/Feature/KepatuhanTest.php
++++ b/backend/tests/Feature/KepatuhanTest.php
+@@ -62,22 +62,46 @@ function kepatuhanFixture(): array
+     $id = $f[$key]->id;
+     $url = '/api/'.$resource.'/'.$id;
+     $this->actingAs($f['actors']['STAFF'])->postJson($url.'/ajukan')->assertForbidden();
+-    $this->actingAs($f['actors']['ADMIN_SATKER'])->postJson($url.'/ajukan')->assertOk()->assertJsonPath('data.status', 'MENUNGGU_KASUB');
++    $submittedStatus = $resource === 'sop-versi' ? 'MENUNGGU_SUPER_ADMIN' : 'MENUNGGU_KASUB';
++    if ($resource === 'sop-versi') {
++        foreach (['STAFF', 'KASUB', 'KABID', 'KASATKER'] as $role) {
++            $this->actingAs($f['actors'][$role])->postJson($url.'/ajukan')->assertForbidden();
++        }
++    }
++    $this->actingAs($f['actors']['ADMIN_SATKER'])->postJson($url.'/ajukan')->assertOk()->assertJsonPath('data.status', $submittedStatus);
+     $this->patchJson($url, [])->assertConflict();
+-    foreach (['KASUB' => 'MENUNGGU_KABID', 'KABID' => 'MENUNGGU_KASATKER', 'KASATKER' => 'DISAHKAN'] as $role => $state) {
+-        $this->actingAs($f['actors'][$role])->postJson($url.'/review', ['tahap' => $role, 'keputusan' => 'SETUJU'])->assertOk()->assertJsonPath('data.status', $state);
++    if ($resource === 'sop-versi') {
++        foreach (['ADMIN_SATKER', 'KASUB', 'KABID', 'KASATKER'] as $role) {
++            $this->actingAs($f['actors'][$role])->postJson($url.'/review', ['tahap' => 'SUPER_ADMIN', 'keputusan' => 'SETUJU'])->assertForbidden();
++        }
++        $this->actingAs($f['actors']['SUPER_ADMIN'])->postJson($url.'/review', ['tahap' => 'SUPER_ADMIN', 'keputusan' => 'SETUJU'])->assertOk()->assertJsonPath('data.status', 'DISAHKAN');
++    } else {
++        foreach (['KASUB' => 'MENUNGGU_KABID', 'KABID' => 'MENUNGGU_KASATKER', 'KASATKER' => 'DISAHKAN'] as $role => $state) {
++            $this->actingAs($f['actors'][$role])->postJson($url.'/review', ['tahap' => $role, 'keputusan' => 'SETUJU'])->assertOk()->assertJsonPath('data.status', $state);
++        }
+     }
+     $this->actingAs($f['actors']['ADMIN_SATKER'])->deleteJson($url)->assertConflict();
+     if ($resource === 'soa-versi') {
+         $this->patchJson('/api/soa-detail/'.$f['detail']->id, ['alasan' => 'Ubah beku'])->assertConflict();
+         $this->postJson('/api/soa-detail/'.$f['detail']->id.'/benchmark', ['regulasi_id' => Regulasi::factory()->create()->id, 'rujukan' => 'Pasal 2'])->assertConflict();
+     }
+-    $this->getJson('/api/'.str_replace('versi', 'review', $resource))->assertOk()->assertJsonCount(3, 'data');
++    $this->getJson('/api/'.str_replace('versi', 'review', $resource))->assertOk()->assertJsonCount($resource === 'sop-versi' ? 1 : 3, 'data');
+ })->with([['sop-versi', 'sopVersion'], ['soa-versi', 'soaVersion']]);
+-test('compliance reviewer matrix matches hierarchy for every phase', function (string $role, string $stage, string $resource, string $key): void {
++test('SOP reviewers are limited to super admin while SOA keeps its existing hierarchy', function (string $role, string $stage, string $resource, string $key): void {
+     $f = kepatuhanFixture();
+-    DB::table($f[$key]->getTable())->where('id', $f[$key]->id)->update(['status' => 'MENUNGGU_'.$stage]);
+-    $response = $this->actingAs($f['actors'][$role])->postJson('/api/'.$resource.'/'.$f[$key]->id.'/review', ['tahap' => $stage, 'keputusan' => 'TOLAK', 'catatan' => 'Perbaiki']);
++    $sop = $resource === 'sop-versi';
++    $actualStage = $sop ? 'SUPER_ADMIN' : $stage;
++    DB::table($f[$key]->getTable())->where('id', $f[$key]->id)->update(['status' => $sop ? 'MENUNGGU_SUPER_ADMIN' : 'MENUNGGU_'.$stage]);
++    $response = $this->actingAs($f['actors'][$role])->postJson('/api/'.$resource.'/'.$f[$key]->id.'/review', ['tahap' => $actualStage, 'keputusan' => 'TOLAK', 'catatan' => 'Perbaiki']);
++    if ($sop) {
++        if ($role === 'SUPER_ADMIN') {
++            $response->assertOk()->assertJsonPath('data.status', 'DITOLAK');
++        } else {
++            $response->assertForbidden();
++        }
++
++        return;
++    }
+     if ($role === $stage) {
+         $response->assertOk()->assertJsonPath('data.status', 'DITOLAK');
+     } else {
+@@ -126,15 +150,15 @@ function kepatuhanFixture(): array
+ });
+ test('compliance requires rejection notes and denies self review with atomic audit failure', function (): void {
+     $f = kepatuhanFixture();
+-    DB::table('SOP_VERSI')->where('id', $f['sopVersion']->id)->update(['status' => 'MENUNGGU_KASUB']);
++    DB::table('SOP_VERSI')->where('id', $f['sopVersion']->id)->update(['status' => 'MENUNGGU_SUPER_ADMIN', 'dibuat_oleh' => $f['actors']['SUPER_ADMIN']->id]);
+     $url = '/api/sop-versi/'.$f['sopVersion']->id.'/review';
+-    $this->actingAs($f['actors']['KASUB'])->postJson($url, ['tahap' => 'KASUB', 'keputusan' => 'TOLAK'])->assertConflict();
+-    grantRole($f['actors']['STAFF'], 'KASUB', $f['unit']->id);
+-    $this->actingAs($f['actors']['STAFF'])->postJson($url, ['tahap' => 'KASUB', 'keputusan' => 'SETUJU'])->assertConflict()->assertJsonPath('code', 'pemisahan_tugas');
++    $this->actingAs($f['actors']['SUPER_ADMIN'])->postJson($url, ['tahap' => 'SUPER_ADMIN', 'keputusan' => 'SETUJU'])->assertConflict()->assertJsonPath('code', 'pemisahan_tugas');
++    DB::table('SOP_VERSI')->where('id', $f['sopVersion']->id)->update(['dibuat_oleh' => $f['actors']['STAFF']->id]);
++    $this->actingAs($f['actors']['SUPER_ADMIN'])->postJson($url, ['tahap' => 'SUPER_ADMIN', 'keputusan' => 'TOLAK'])->assertConflict()->assertJsonPath('code', 'catatan_wajib');
+     $this->mock(AuditService::class, fn ($mock) => $mock->shouldReceive('record')->andThrow(new RuntimeException('Audit gagal')));
+-    $this->actingAs($f['actors']['KASUB'])->postJson($url, ['tahap' => 'KASUB', 'keputusan' => 'SETUJU'])->assertStatus(500);
++    $this->actingAs($f['actors']['SUPER_ADMIN'])->postJson($url, ['tahap' => 'SUPER_ADMIN', 'keputusan' => 'SETUJU'])->assertStatus(500);
+     $this->assertDatabaseCount('SOP_REVIEW', 0);
+-    expect($f['sopVersion']->fresh()->status)->toBe('MENUNGGU_KASUB');
++    expect($f['sopVersion']->fresh()->status)->toBe('MENUNGGU_SUPER_ADMIN');
+ });
+ 
+ test('draft creation and deletion follow role matrix', function (string $role): void {

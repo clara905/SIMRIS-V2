@@ -29,6 +29,16 @@ type PasswordForm = {
   password_confirmation: string
 }
 
+type UserForm = {
+  username: string
+  email_login: string
+}
+
+type UnitOption = Option & {
+  jenis: string
+  parent_id: number | null
+}
+
 const emptyCreate: CreateForm = {
   pegawai_id: '',
   username: '',
@@ -51,21 +61,26 @@ const emptyPassword: PasswordForm = {
   password_confirmation: '',
 }
 
+const emptyUserForm: UserForm = { username: '', email_login: '' }
+
 const str = (value: unknown) => (value == null ? '' : String(value))
 const first = (errors: Record<string, string[]>, key: string) => errors[key]?.[0]
 
-export function KelolaPengguna() {
+export function KelolaPengguna({ superAdmin = false }: { superAdmin?: boolean }) {
   const client = useQueryClient()
   const session = useSession()
   const satker = useSatkerUnit()
   const [page, setPage] = useState(1)
   const [creating, setCreating] = useState(false)
   const [selected, setSelected] = useState<Row | null>(null)
-  const [deactivating, setDeactivating] = useState<Row | null>(null)
+  const [editingUser, setEditingUser] = useState<Row | null>(null)
+  const [editingScope, setEditingScope] = useState<Row | null>(null)
+  const [deleting, setDeleting] = useState<Row | null>(null)
   const [resetting, setResetting] = useState<Row | null>(null)
   const [revoking, setRevoking] = useState<Row | null>(null)
   const [createForm, setCreateForm] = useState<CreateForm>(emptyCreate)
   const [grantForm, setGrantForm] = useState<GrantForm>(emptyGrant)
+  const [userForm, setUserForm] = useState<UserForm>(emptyUserForm)
   const [passwordForm, setPasswordForm] = useState<PasswordForm>(emptyPassword)
   const [currentPassword, setCurrentPassword] = useState('')
   const [revokePassword, setRevokePassword] = useState('')
@@ -76,6 +91,24 @@ export function KelolaPengguna() {
     queryKey: ['satker', 'users', page],
     queryFn: ({ signal }) =>
       getPage('/api/users', { page, per_page: 10, sort: '-id' }, signal),
+  })
+
+  const updateUser = useMutation({
+    mutationFn: () =>
+      api.patch('/api/users/' + editingUser?.id, {
+        username: userForm.username.trim(),
+        email_login: userForm.email_login.trim(),
+      }),
+    onSuccess: () => {
+      toast.success('Data pengguna berhasil diperbarui.')
+      setEditingUser(null)
+      setErrors({})
+      refresh()
+    },
+    onError: (error) => {
+      setErrors(fieldErrors(error))
+      toast.error(errorMessage(error))
+    },
   })
 
   const employees = useQuery({
@@ -90,20 +123,28 @@ export function KelolaPengguna() {
 
   const unitOptions = useQuery({
     queryKey: ['satker', 'users', 'units'],
-    queryFn: ({ signal }) =>
-      getOptions(
-        '/api/unit-organisasi',
-        (row) => `${str(row.kode)} — ${str(row.nama)}`,
-        signal,
-      ),
+    queryFn: async ({ signal }): Promise<UnitOption[]> => {
+      const units = await getPage('/api/unit-organisasi', { per_page: 100 }, signal)
+      return units.data.map((row) => ({
+        id: row.id,
+        label: `${str(row.kode)} — ${str(row.nama)}`,
+        jenis: str(row.jenis),
+        parent_id: row.parent_id == null ? null : Number(row.parent_id),
+      }))
+    },
   })
 
   const roleOptions = useQuery({
-    queryKey: ['satker', 'users', 'roles'],
+    queryKey: ['satker', 'users', 'roles', superAdmin],
     queryFn: async ({ signal }) => {
       const all = (await getPage('/api/roles', { per_page: 100 }, signal)).data
       return all
-        .filter((row) => ['STAFF', 'KASUB', 'KABID', 'KASATKER'].includes(str(row.kode)))
+        .filter((row) =>
+          (superAdmin
+            ? ['STAFF', 'KASUB', 'KABID', 'KASATKER', 'ADMIN_SATKER', 'SUPER_ADMIN']
+            : ['STAFF', 'KASUB', 'KABID', 'KASATKER']
+          ).includes(str(row.kode)),
+        )
         .map((row) => ({
           id: row.id,
           label: `${row.kode} — ${row.nama}`,
@@ -155,16 +196,20 @@ export function KelolaPengguna() {
   const grant = useMutation({
     mutationFn: async () => {
       await api.post('/api/konfirmasi-password', { password: currentPassword })
-      return api.post('/api/user-role-scope', {
+      const body = {
         user_id: selected?.id,
         role_id: Number(grantForm.role_id),
-        unit_id: Number(grantForm.unit_id),
+        unit_id: grantForm.unit_id ? Number(grantForm.unit_id) : null,
         mulai: grantForm.mulai,
-        ...(grantForm.selesai ? { selesai: grantForm.selesai } : {}),
-      })
+        selesai: grantForm.selesai || null,
+      }
+      return editingScope
+        ? api.patch('/api/user-role-scope/' + editingScope.id, body)
+        : api.post('/api/user-role-scope', body)
     },
     onSuccess: () => {
-      toast.success('Role berhasil diberikan.')
+      toast.success(editingScope ? 'Akses role berhasil diperbarui.' : 'Role berhasil diberikan.')
+      setEditingScope(null)
       const defaultUnitId = unitOptions.data?.length === 1 ? String(unitOptions.data[0].id) : ''
       setGrantForm({ ...emptyGrant, unit_id: defaultUnitId })
       setCurrentPassword('')
@@ -180,14 +225,13 @@ export function KelolaPengguna() {
     },
   })
 
-  const userAction = useMutation({
-    mutationFn: async ({ row, action }: { row: Row; action: 'aktifkan' | 'nonaktifkan' }) =>
-      api.post('/api/users/' + row.id + '/' + action),
-    onSuccess: (_, variables) => {
-      toast.success(
-        variables.action === 'aktifkan' ? 'Akun berhasil diaktifkan.' : 'Akun dinonaktifkan.',
-      )
-      setDeactivating(null)
+  const removeUser = useMutation({
+    mutationFn: async () => {
+      if (deleting) await api.delete('/api/users/' + deleting.id)
+    },
+    onSuccess: () => {
+      toast.success('Akun pengguna berhasil dihapus.')
+      setDeleting(null)
       refresh()
     },
     onError: (error) => toast.error(errorMessage(error)),
@@ -275,6 +319,7 @@ export function KelolaPengguna() {
 
   const openGrantRole = (row: Row) => {
     setSelected(row)
+    setEditingScope(null)
     const defaultUnitId = unitOptions.data?.length === 1 ? String(unitOptions.data[0].id) : ''
     setGrantForm({
       ...emptyGrant,
@@ -285,10 +330,14 @@ export function KelolaPengguna() {
 
   const grantSubmit = (event: FormEvent) => {
     event.preventDefault()
-    if (!grantForm.role_id || !grantForm.unit_id || !grantForm.mulai) {
+    const roleCode = roleOptions.data?.find(
+      (role) => role.id === Number(grantForm.role_id),
+    )?.code
+    const needsUnit = roleCode !== 'SUPER_ADMIN'
+    if (!grantForm.role_id || (needsUnit && !grantForm.unit_id) || !grantForm.mulai) {
       setErrors({
         role_id: !grantForm.role_id ? ['Pilih role.'] : [],
-        unit_id: !grantForm.unit_id ? ['Pilih unit.'] : [],
+        unit_id: needsUnit && !grantForm.unit_id ? ['Pilih unit.'] : [],
         mulai: !grantForm.mulai ? ['Tanggal mulai wajib diisi.'] : [],
       })
       return
@@ -304,8 +353,45 @@ export function KelolaPengguna() {
   const privileged = (row: Row) =>
     row.dapat_diubah === false || str(row.alasan_tidak_dapat_diubah) !== ''
 
+  const openEditScope = (scope: Row) => {
+    setEditingScope(scope)
+    setGrantForm({
+      role_id: str(scope.role_id),
+      unit_id: str(scope.unit_id),
+      mulai: str(scope.mulai).slice(0, 10),
+      selesai: str(scope.selesai).slice(0, 10),
+    })
+    setCurrentPassword('')
+    setErrors({})
+  }
+
+  const openEditUser = (row: Row) => {
+    setEditingUser(row)
+    setUserForm({ username: str(row.username), email_login: str(row.email_login) })
+    setErrors({})
+  }
+
+  const editUserSubmit = (event: FormEvent) => {
+    event.preventDefault()
+    const next: Record<string, string[]> = {}
+    if (!userForm.username.trim()) next.username = ['Username wajib diisi.']
+    else if (!/^[A-Za-z0-9._-]+$/.test(userForm.username.trim())) {
+      next.username = ['Gunakan huruf, angka, titik, garis bawah, atau tanda hubung.']
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userForm.email_login.trim())) {
+      next.email_login = ['Masukkan alamat email login yang valid.']
+    }
+    if (Object.keys(next).length) {
+      setErrors(next)
+      return
+    }
+    setErrors({})
+    updateUser.mutate()
+  }
+
   const closeDrawer = () => {
     setSelected(null)
+    setEditingScope(null)
     setErrors({})
   }
 
@@ -313,10 +399,12 @@ export function KelolaPengguna() {
     <>
       <div className="ws-page-heading">
         <div>
-          <span className="ws-eyebrow">Pengelolaan satker</span>
+          <span className="ws-eyebrow">{superAdmin ? 'Administrasi' : 'Pengelolaan satker'}</span>
           <h1>Kelola pengguna &amp; role</h1>
           <p>
-            Buat akun untuk pegawai satker dan kelola role operasional (STAFF, KASUB, KABID, KASATKER).
+            {superAdmin
+              ? 'Kelola akun pengguna dan seluruh akses role pada unit organisasi.'
+              : 'Buat akun untuk pegawai satker dan kelola role operasional (STAFF, KASUB, KABID, KASATKER).'}
           </p>
         </div>
         <button className="primary" onClick={openCreateDialog}>
@@ -326,7 +414,7 @@ export function KelolaPengguna() {
 
       <section className="ws-panel">
         <div className="ws-register-tools">
-          <strong>Daftar pengguna dalam wilayah satker</strong>
+          <strong>{superAdmin ? 'Seluruh pengguna' : 'Pengguna dalam wilayah satker'}</strong>
           <button
             className="ws-refresh"
             aria-label="Perbarui pengguna"
@@ -365,6 +453,7 @@ export function KelolaPengguna() {
                     <th>Username</th>
                     <th>Email</th>
                     <th>Pegawai</th>
+                    <th>Penempatan aktif</th>
                     <th>Status</th>
                     <th>Aksi &amp; Kewenangan</th>
                   </tr>
@@ -372,7 +461,7 @@ export function KelolaPengguna() {
                 <tbody>
                   {users.data.data.map((row) => {
                     const own = row.id === session.data?.id
-                    const locked = privileged(row) || own
+                    const locked = own || (!superAdmin && privileged(row))
                     const active = row.aktif === true || row.aktif === 1
                     return (
                       <tr key={row.id}>
@@ -384,6 +473,18 @@ export function KelolaPengguna() {
                           {employees.data?.find(
                             (option) => option.id === Number(row.pegawai_id),
                           )?.label ?? '#' + row.pegawai_id}
+                        </td>
+                        <td>
+                          {Array.isArray(row.penempatan_aktif) && row.penempatan_aktif.length
+                            ? row.penempatan_aktif
+                                .map((placement) => {
+                                  if (!placement || typeof placement !== 'object') return ''
+                                  const item = placement as Record<string, unknown>
+                                  return `${str(item.kode)} — ${str(item.nama)}${item.utama ? ' (utama)' : ''}`
+                                })
+                                .filter(Boolean)
+                                .join(', ')
+                            : '-'}
                         </td>
                         <td>
                           <span className={'ws-badge ' + (active ? 'success' : 'neutral')}>
@@ -406,6 +507,9 @@ export function KelolaPengguna() {
                             </span>
                           ) : (
                             <div className="ws-register-tools">
+                              <button type="button" onClick={() => openEditUser(row)}>
+                                Ubah akun
+                              </button>
                               <button type="button" onClick={() => openGrantRole(row)}>
                                 Kelola role
                               </button>
@@ -426,14 +530,10 @@ export function KelolaPengguna() {
                               )}
                               <button
                                 type="button"
-                                disabled={userAction.isPending}
-                                onClick={() =>
-                                  active
-                                    ? setDeactivating(row)
-                                    : userAction.mutate({ row, action: 'aktifkan' })
-                                }
+                                disabled={removeUser.isPending}
+                                onClick={() => setDeleting(row)}
                               >
-                                {active ? 'Nonaktifkan' : 'Aktifkan'}
+                                Hapus
                               </button>
                             </div>
                           )}
@@ -473,7 +573,11 @@ export function KelolaPengguna() {
         open={creating}
         onClose={() => setCreating(false)}
         title="Buat akun pengguna baru"
-        description="Akun wajib terhubung ke pegawai dengan penempatan aktif di wilayah satker Anda. Password minimal 12 karakter."
+        description={
+          superAdmin
+            ? 'Buat akun pengguna dan hubungkan dengan pegawai. Password minimal 12 karakter.'
+            : 'Akun wajib terhubung ke pegawai dengan penempatan aktif di wilayah satker Anda. Password minimal 12 karakter.'
+        }
       >
         <form className="ws-profile-form" onSubmit={createSubmit} noValidate>
           <div className="ws-profile-form-grid">
@@ -543,14 +647,55 @@ export function KelolaPengguna() {
       </Drawer>
 
       <Drawer
+        open={!!editingUser}
+        onClose={() => {
+          setEditingUser(null)
+          setErrors({})
+        }}
+        title={'Ubah akun: ' + str(editingUser?.username)}
+        description="Perbarui username dan email login akun pengguna."
+      >
+        <form className="ws-profile-form" onSubmit={editUserSubmit} noValidate>
+          <div className="ws-profile-form-grid">
+            <TextField
+              id="edit-username"
+              label="Username"
+              value={userForm.username}
+              error={first(errors, 'username')}
+              disabled={updateUser.isPending}
+              onChange={(value) => setUserForm((old) => ({ ...old, username: value }))}
+            />
+            <TextField
+              id="edit-email-login"
+              label="Email login"
+              type="email"
+              value={userForm.email_login}
+              error={first(errors, 'email_login')}
+              disabled={updateUser.isPending}
+              onChange={(value) => setUserForm((old) => ({ ...old, email_login: value }))}
+            />
+          </div>
+          <div className="ws-profile-actions">
+            <button className="primary" disabled={updateUser.isPending}>
+              {updateUser.isPending ? 'Menyimpan...' : 'Simpan perubahan'}
+            </button>
+          </div>
+        </form>
+      </Drawer>
+
+      <Drawer
         open={!!selected}
         onClose={closeDrawer}
         title={'Kelola role: ' + str(selected?.username)}
-        description="Pilihan role operasional: STAFF, KASUB, KABID, KASATKER dalam lingkup unit satker."
+        description={
+          superAdmin
+            ? 'Kelola role, unit organisasi, dan masa berlaku akses pengguna.'
+            : 'Pilihan role operasional: STAFF, KASUB, KABID, KASATKER dalam lingkup unit satker.'
+        }
       >
         {selected && (
           <div className="ws-detail">
-            {privileged(selected) || selected.id === session.data?.id ? (
+            {selected.id === session.data?.id || (!superAdmin && privileged(selected)) ? (
               <p role="note">
                 {str(selected.alasan_tidak_dapat_diubah) ||
                   (selected.id === session.data?.id
@@ -559,7 +704,7 @@ export function KelolaPengguna() {
               </p>
             ) : (
               <form className="ws-profile-form" onSubmit={grantSubmit} noValidate>
-                <h3>Berikan role operasional</h3>
+                <h3>{editingScope ? 'Ubah akses role' : 'Berikan role'}</h3>
                 <div className="ws-profile-form-grid">
                   <SelectField
                     id="grant-role"
@@ -568,17 +713,50 @@ export function KelolaPengguna() {
                     options={roleOptions.data ?? []}
                     error={first(errors, 'role_id')}
                     disabled={grant.isPending}
-                    onChange={(value) => setGrantForm((old) => ({ ...old, role_id: value }))}
+                    onChange={(value) =>
+                      setGrantForm((old) => {
+                        const nextRole = roleOptions.data?.find(
+                          (role) => role.id === Number(value),
+                        )
+                        const isRootSatker = unitOptions.data?.some(
+                          (unit) =>
+                            unit.id === Number(old.unit_id) &&
+                            unit.jenis === 'SATKER' &&
+                            unit.parent_id === null,
+                        )
+                        return {
+                          ...old,
+                          role_id: value,
+                          unit_id:
+                            nextRole?.code === 'SUPER_ADMIN' ||
+                            (nextRole?.code === 'ADMIN_SATKER' && !isRootSatker)
+                              ? ''
+                              : old.unit_id,
+                        }
+                      })
+                    }
                   />
-                  <SelectField
-                    id="grant-unit"
-                    label="Unit"
-                    value={grantForm.unit_id}
-                    options={unitOptions.data ?? []}
-                    error={first(errors, 'unit_id')}
-                    disabled={grant.isPending}
-                    onChange={(value) => setGrantForm((old) => ({ ...old, unit_id: value }))}
-                  />
+                  {roleOptions.data?.find((role) => role.id === Number(grantForm.role_id))
+                    ?.code === 'SUPER_ADMIN' ? (
+                    <p>SUPER_ADMIN menggunakan akses global tanpa unit.</p>
+                  ) : (
+                    <SelectField
+                      id="grant-unit"
+                      label="Unit / SATKER"
+                      value={grantForm.unit_id}
+                      options={
+                        roleOptions.data?.find((role) => role.id === Number(grantForm.role_id))
+                          ?.code === 'ADMIN_SATKER'
+                          ? (unitOptions.data ?? [])
+                              .filter((unit) => unit.jenis === 'SATKER' && unit.parent_id === null)
+                              .map(({ id, label }) => ({ id, label }))
+                          : (unitOptions.data ?? [])
+                      }
+                      error={first(errors, 'unit_id')}
+                      disabled={grant.isPending}
+                      onChange={(value) => setGrantForm((old) => ({ ...old, unit_id: value }))}
+                    />
+                  )}
                   <TextField
                     id="grant-start"
                     label="Tanggal mulai"
@@ -628,7 +806,11 @@ export function KelolaPengguna() {
 
                 <div className="ws-profile-actions">
                   <button className="primary" disabled={grant.isPending}>
-                    {grant.isPending ? 'Menyimpan...' : 'Berikan role'}
+                    {grant.isPending
+                      ? 'Menyimpan...'
+                      : editingScope
+                        ? 'Simpan perubahan'
+                        : 'Berikan role'}
                   </button>
                 </div>
               </form>
@@ -669,8 +851,15 @@ export function KelolaPengguna() {
                           <td>{str(scope.selesai).slice(0, 10) || '-'}</td>
                           <td>
                             {selected.id !== session.data?.id &&
-                              !privileged(selected) &&
-                              scope.dapat_diubah !== false && (
+                              (superAdmin || (!privileged(selected) && scope.dapat_diubah !== false)) && (
+                                <>
+                                  <button
+                                    className="ws-row-open"
+                                    aria-label={'Ubah akses role ' + scope.role_id}
+                                    onClick={() => openEditScope(scope)}
+                                  >
+                                    Ubah
+                                  </button>
                                 <button
                                   className="ws-row-open"
                                   aria-label={'Cabut role ' + scope.role_id}
@@ -678,6 +867,7 @@ export function KelolaPengguna() {
                                 >
                                   Cabut
                                 </button>
+                                </>
                               )}
                             {scope.dapat_diubah === false && (
                               <span title={str(scope.alasan_tidak_dapat_diubah)}>Hanya baca</span>
@@ -763,18 +953,16 @@ export function KelolaPengguna() {
       </Drawer>
 
       <ConfirmDialog
-        open={!!deactivating}
-        onClose={() => setDeactivating(null)}
-        title="Nonaktifkan akun pengguna?"
+        open={!!deleting}
+        onClose={() => setDeleting(null)}
+        title="Hapus akun pengguna permanen?"
         description={[
-          `Akun ${str(deactivating?.username)} tidak dapat digunakan untuk masuk sampai diaktifkan kembali.`,
-          'Hak akses dan data audit tetap tersimpan.',
+          `Akun ${str(deleting?.username)} akan dihapus permanen beserta role dan scope aksesnya.`,
+          'Penghapusan ditolak jika akun masih dirujuk oleh audit, dokumen, atau riwayat operasional.',
         ]}
-        confirmLabel="Ya, nonaktifkan"
-        pending={userAction.isPending}
-        onConfirm={async () => {
-          if (deactivating) await userAction.mutateAsync({ row: deactivating, action: 'nonaktifkan' })
-        }}
+        confirmLabel="Hapus akun"
+        pending={removeUser.isPending}
+        onConfirm={() => removeUser.mutateAsync()}
       />
 
       <ConfirmDialog

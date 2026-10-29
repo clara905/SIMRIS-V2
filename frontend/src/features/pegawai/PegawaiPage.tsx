@@ -125,8 +125,8 @@ export default function PegawaiPage() {
               {
                 name: 'nip',
                 label: 'NIP',
-                pattern: /^\d{18}$/,
-                hint: 'Gunakan 18 angka tanpa spasi.',
+                pattern: /^\d{1,18}$/,
+                hint: 'Gunakan maksimal 18 angka tanpa spasi.',
               },
               { name: 'email', label: 'Email', type: 'email' },
             ]}

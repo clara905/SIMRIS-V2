@@ -22,7 +22,7 @@ class AsetService
     {
         Gate::forUser($actor)->authorize('aset.view');
 
-        $units = $this->scope->ids($actor);
+        $units = $this->units($actor);
 
         return Aset::whereIn('unit_pemilik_id', $units);
     }
@@ -61,7 +61,7 @@ class AsetService
             $asset = $this->query($actor)->whereKey($id)->lockForUpdate()->firstOrFail();
             Gate::forUser($actor->refresh())->authorize('aset.write', [(int) $asset->unit_pemilik_id]);
             if (isset($data['unit_pemilik_id'])) {
-                $unit = UnitOrganisasi::whereIn('id', $this->scope->idsForRoles($actor, ['ADMIN_SATKER']))->findOrFail($data['unit_pemilik_id']);
+                $unit = UnitOrganisasi::whereIn('id', $this->units($actor))->findOrFail($data['unit_pemilik_id']);
                 if (! $unit->aktif) {
                     throw new BusinessRuleException('unit_tidak_aktif', 'Unit pemilik harus aktif.');
                 }
@@ -95,16 +95,35 @@ class AsetService
             $model->fill($data);
             $asset = $this->query($actor)->findOrFail($model->aset_id);
             Gate::forUser($actor)->authorize('aset.write', [(int) $asset->unit_pemilik_id]);
-            $pegawai = Pegawai::whereIn('id', DB::table('PENEMPATAN_PEGAWAI')->select('pegawai_id')->whereIn('unit_id', $this->scope->idsForRoles($actor, ['ADMIN_SATKER']))->where('mulai', '<=', today())->where(fn ($q) => $q->whereNull('selesai')->orWhere('selesai', '>=', today())))->findOrFail($model->pegawai_id);
+            $pegawai = Pegawai::whereIn('id', DB::table('PENEMPATAN_PEGAWAI')->select('pegawai_id')->whereIn('unit_id', $this->units($actor))->where('mulai', '<=', today())->where(fn ($q) => $q->whereNull('selesai')->orWhere('selesai', '>=', today())))->findOrFail($model->pegawai_id);
             if (! $pegawai->aktif) {
                 throw new BusinessRuleException('pegawai_tidak_aktif', 'Pegawai penugasan harus aktif.');
             }
             if ($model->selesai && $model->selesai->lt($model->mulai)) {
                 throw new BusinessRuleException('rentang_tidak_valid', 'Selesai tidak boleh sebelum mulai.');
             }
+            $overlap = PenugasanAset::where('aset_id', $model->aset_id)
+                ->where('jenis_tanggung_jawab', $model->jenis_tanggung_jawab)
+                ->when($id, fn ($q) => $q->where('id', '!=', $id))
+                ->where(fn ($q) => $q->whereNull('selesai')->orWhereDate('selesai', '>=', $model->mulai->toDateString()))
+                ->when($model->selesai, fn ($q) => $q->whereDate('mulai', '<=', $model->selesai->toDateString()))
+                ->lockForUpdate()->exists();
+            if ($overlap) {
+                throw new BusinessRuleException('penugasan_tumpang_tindih', 'Periode penugasan aset untuk jenis tanggung jawab yang sama tidak boleh tumpang tindih.');
+            }
             $model->save();
 
             return $model;
         });
+    }
+
+    /** Wilayah admin satker selalu berasal dari role ADMIN_SATKER aktif. */
+    private function units(User $actor): array
+    {
+        return $this->scope->isSuper($actor)
+            ? $this->scope->ids($actor)
+            : ($this->scope->hasRole($actor, ['ADMIN_SATKER'])
+                ? $this->scope->idsForRoles($actor, ['ADMIN_SATKER'])
+                : $this->scope->ids($actor));
     }
 }

@@ -12,6 +12,9 @@ class UserRoleScope extends Model
 {
     use Auditable, SerializesLocalDates;
 
+    /** Admin satker menulis audit berpenanda secara eksplisit dari AdminService. */
+    public bool $suppressAutomaticAudit = false;
+
     /** @use HasFactory<UserRoleScopeFactory> */
     use HasFactory;
 

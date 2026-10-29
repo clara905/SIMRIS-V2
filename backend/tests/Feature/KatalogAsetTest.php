@@ -121,7 +121,7 @@ test('asset scope applies before validation and blocks unrelated role escalation
     $this->actingAs($user)->getJson('/api/aset/'.$foreign->id)->assertNotFound();
     $this->patchJson('/api/aset/'.$foreign->id, ['nama' => 'X'])->assertNotFound();
     grantRole($user, 'STAFF', $other->id);
-    $this->patchJson('/api/aset/'.$foreign->id, ['lokasi' => 'Lab'])->assertForbidden();
+    $this->patchJson('/api/aset/'.$foreign->id, ['lokasi' => 'Lab'])->assertNotFound();
 });
 test('admin satker asset listing includes every child bidang and separates assessment state', function (): void {
     $unit = UnitOrganisasi::factory()->create();
@@ -158,6 +158,8 @@ test('assignment CRUD validates employee and asset scope', function (): void {
     $id = $this->actingAs($user)->postJson('/api/penugasan-aset', ['aset_id' => $asset->id, 'pegawai_id' => $employee->id, 'jenis_tanggung_jawab' => 'PIC', 'mulai' => '2026-01-01'])->assertCreated()->json('data.id');
     $this->patchJson('/api/penugasan-aset/'.$id, ['selesai' => '2025-01-01'])->assertConflict();
     $this->patchJson('/api/penugasan-aset/'.$id, ['selesai' => '2026-12-31'])->assertOk();
+    $this->postJson('/api/penugasan-aset', ['aset_id' => $asset->id, 'pegawai_id' => $employee->id, 'jenis_tanggung_jawab' => 'PIC', 'mulai' => '2026-06-01'])
+        ->assertConflict()->assertJsonPath('code', 'penugasan_tumpang_tindih');
     $this->deleteJson('/api/penugasan-aset/'.$id)->assertOk();
     $this->assertDatabaseMissing('PENUGASAN_ASET', ['id' => $id]);
 });

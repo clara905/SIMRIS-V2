@@ -16,6 +16,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
 class AdminController extends Controller
@@ -134,5 +135,20 @@ class AdminController extends Controller
         $pegawai = $this->service->query('pegawai', $request->user())->findOrFail($request->route('id'));
 
         return response()->json(['data' => DB::table('v_pegawai_unit')->where('pegawai_id', $pegawai->id)->first()]);
+    }
+
+    #[Response(status: 200, description: 'NIP pegawai setelah konfirmasi password.', type: 'array{data: array{nip: string|null}}')]
+    #[Response(status: 401, description: 'Autentikasi diperlukan.', type: 'array{message: string}')]
+    #[Response(status: 403, description: 'Konfirmasi password diperlukan atau hak akses tidak memenuhi syarat.', type: 'array{message: string, code?: string}')]
+    #[Response(status: 404, description: 'Pegawai tidak ditemukan atau berada di luar scope.', type: 'array{message: string}')]
+    public function revealNip(AdminRequest $request): JsonResponse
+    {
+        if (! Hash::check($request->validated('password'), $request->user()->password_hash)) {
+            throw ValidationException::withMessages(['password' => ['Password tidak sesuai.']]);
+        }
+        $pegawai = $this->service->query('pegawai', $request->user())
+            ->findOrFail((int) $request->route('id'));
+
+        return response()->json(['data' => ['nip' => $pegawai->nip]]);
     }
 }

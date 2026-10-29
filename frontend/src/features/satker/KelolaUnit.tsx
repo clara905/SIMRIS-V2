@@ -24,7 +24,7 @@ type UnitForm = {
   aktif: boolean
 }
 
-const ALLOWED_CHILD_KINDS = ['BIDANG', 'BAGIAN', 'SUBBIDANG', 'SUBBAGIAN']
+const UNIT_KINDS = ['SATKER', 'BIDANG', 'BAGIAN', 'SUBBIDANG', 'SUBBAGIAN']
 
 const emptyForm: UnitForm = {
   parent_id: '',
@@ -43,12 +43,24 @@ function flattenTree(nodes: Unit[], depth = 0): Array<{ unit: Unit; depth: numbe
   ])
 }
 
-export function KelolaUnit() {
+function flattenVisibleTree(
+  nodes: Unit[],
+  collapsed: Set<number>,
+  depth = 0,
+): Array<{ unit: Unit; depth: number }> {
+  return nodes.flatMap((unit) => [
+    { unit, depth },
+    ...(collapsed.has(unit.id) ? [] : flattenVisibleTree(unit.children ?? [], collapsed, depth + 1)),
+  ])
+}
+
+export function KelolaUnit({ superAdmin = false }: { superAdmin?: boolean }) {
   const client = useQueryClient()
   const [selected, setSelected] = useState<Unit | null>(null)
   const [creating, setCreating] = useState(false)
   const [moving, setMoving] = useState<Unit | null>(null)
   const [removing, setRemoving] = useState<Unit | null>(null)
+  const [collapsedUnits, setCollapsedUnits] = useState<Set<number>>(() => new Set())
   const [errors, setErrors] = useState<Record<string, string[]>>({})
   const [form, setForm] = useState<UnitForm>(emptyForm)
   const [moveParent, setMoveParent] = useState('')
@@ -81,14 +93,23 @@ export function KelolaUnit() {
       if (creating) {
         await api.post('/api/unit-organisasi', {
           ...body,
-          parent_id: Number(form.parent_id),
+          parent_id: form.parent_id ? Number(form.parent_id) : null,
         })
       } else if (selected) {
-        await api.patch('/api/unit-organisasi/' + selected.id, body)
+        const values = selected.jenis === 'SATKER' && !superAdmin
+          ? { kode: body.kode, nama: body.nama }
+          : body
+        await api.patch('/api/unit-organisasi/' + selected.id, values)
       }
     },
     onSuccess: () => {
-      toast.success(creating ? 'Unit anak berhasil dibuat.' : 'Unit berhasil diperbarui.')
+      toast.success(
+        creating
+          ? form.jenis === 'SATKER'
+            ? 'SATKER berhasil dibuat.'
+            : 'Unit anak berhasil dibuat.'
+          : 'Unit berhasil diperbarui.',
+      )
       setCreating(false)
       setSelected(null)
       setErrors({})
@@ -132,6 +153,7 @@ export function KelolaUnit() {
   })
 
   const rows = tree.data ? flattenTree(tree.data) : []
+  const visibleRows = tree.data ? flattenVisibleTree(tree.data, collapsedUnits) : []
   const unitOptions: Option[] = rows.map(({ unit }) => ({
     id: unit.id,
     label: `${unit.kode} — ${unit.nama}`,
@@ -142,13 +164,8 @@ export function KelolaUnit() {
     .map(({ unit }) => ({ id: unit.id, label: `${unit.kode} — ${unit.nama}` }))
 
   const openCreate = (parent?: Unit) => {
-    const defaultParentId = parent
-      ? String(parent.id)
-      : parentOptions.length === 1
-        ? String(parentOptions[0].id)
-        : rows[0]?.unit.id
-          ? String(rows[0].unit.id)
-          : ''
+    const root = rows.find(({ unit }) => unit.jenis === 'SATKER')?.unit
+    const defaultParentId = parent ? String(parent.id) : superAdmin ? '' : root ? String(root.id) : ''
     setForm({
       ...emptyForm,
       parent_id: defaultParentId,
@@ -173,21 +190,23 @@ export function KelolaUnit() {
 
   const parentType = rows.find((row) => row.unit.id === Number(form.parent_id))?.unit.jenis
   const allowedKindsFromBackend = parentType ? kinds.data?.[parentType] : undefined
-  const kindOptions = allowedKindsFromBackend
-    ? allowedKindsFromBackend.filter((k) => ALLOWED_CHILD_KINDS.includes(k))
-    : ALLOWED_CHILD_KINDS
+  const kindOptions = !form.parent_id && superAdmin
+    ? ['SATKER']
+    : (allowedKindsFromBackend ?? []).filter((kind) =>
+        UNIT_KINDS.includes(kind),
+      )
+  const selectedIsRoot = selected?.jenis === 'SATKER'
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
     const nextErrors: Record<string, string[]> = {}
-    if (creating && !form.parent_id) {
-      nextErrors.parent_id = ['Pilih unit induk dalam wilayah satker.']
-    }
+    if (creating && !form.parent_id && (!superAdmin || form.jenis !== 'SATKER'))
+      nextErrors.parent_id = ['Pilih unit induk yang sesuai dengan jenis unit.']
     if (!form.kode.trim()) nextErrors.kode = ['Kode wajib diisi.']
     if (!form.nama.trim()) nextErrors.nama = ['Nama wajib diisi.']
     if (!form.jenis) nextErrors.jenis = ['Pilih jenis unit.']
-    else if (!ALLOWED_CHILD_KINDS.includes(form.jenis)) {
-      nextErrors.jenis = ['Jenis unit anak hanya boleh BIDANG, BAGIAN, SUBBIDANG, atau SUBBAGIAN.']
+    else if (!kindOptions.includes(form.jenis) && !(!creating && selectedIsRoot && superAdmin)) {
+      nextErrors.jenis = ['Jenis unit tidak sesuai dengan unit induk.']
     }
     if (Object.keys(nextErrors).length) {
       setErrors(nextErrors)
@@ -203,21 +222,28 @@ export function KelolaUnit() {
     <>
       <div className="ws-page-heading">
         <div>
-          <span className="ws-eyebrow">Pengelolaan satker</span>
+          <span className="ws-eyebrow">{superAdmin ? 'Organisasi' : 'Pengelolaan satker'}</span>
           <h1>Kelola unit organisasi</h1>
           <p>
-            Kelola struktur unit anak dalam wilayah satker (Bidang, Bagian, Subbidang, atau Subbagian).
-            Unit induk satker bersifat tetap (read-only).
+            {superAdmin
+              ? 'Buat dan kelola unit SATKER sebagai induk serta unit anak sesuai struktur organisasi.'
+              : 'Kelola SATKER yang menjadi wilayah Anda dan unit anaknya. SATKER lain tidak dapat diakses.'}
           </p>
         </div>
         <button className="primary" onClick={() => openCreate()}>
-          <Plus size={16} /> Tambah unit anak
+          <Plus size={16} /> {superAdmin ? 'Tambah unit' : 'Tambah unit anak'}
         </button>
       </div>
 
       <section className="ws-panel">
         <div className="ws-register-tools">
           <strong>Struktur unit satker</strong>
+          <button type="button" onClick={() => setCollapsedUnits(new Set(rows.filter(({ unit }) => unit.children?.length).map(({ unit }) => unit.id)))}>
+            Tutup semua
+          </button>
+          <button type="button" onClick={() => setCollapsedUnits(new Set())}>
+            Buka semua
+          </button>
           <button
             className="ws-refresh"
             aria-label="Perbarui struktur unit"
@@ -255,8 +281,10 @@ export function KelolaUnit() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map(({ unit, depth }) => {
+                {visibleRows.map(({ unit, depth }) => {
                   const isRootSatker = unit.jenis === 'SATKER' || unit.parent_id === null
+                  const canAddChild =
+                    unit.aktif && (kinds.data?.[unit.jenis]?.some((kind) => UNIT_KINDS.includes(kind)) ?? false)
                   return (
                     <tr key={unit.id}>
                       <td>
@@ -268,7 +296,24 @@ export function KelolaUnit() {
                             gap: 6,
                           }}
                         >
-                          <ChevronRight size={14} />
+                          {unit.children?.length ? (
+                            <button
+                              type="button"
+                              className="ws-row-open"
+                              aria-label={`${collapsedUnits.has(unit.id) ? 'Buka' : 'Tutup'} unit ${unit.nama}`}
+                              aria-expanded={!collapsedUnits.has(unit.id)}
+                              title={`${collapsedUnits.has(unit.id) ? 'Buka' : 'Tutup'} unit ${unit.nama}`}
+                              onClick={() => setCollapsedUnits((current) => {
+                                const next = new Set(current)
+                                if (next.has(unit.id)) next.delete(unit.id)
+                                else next.add(unit.id)
+                                return next
+                              })}
+                              style={{ padding: 2, transform: collapsedUnits.has(unit.id) ? undefined : 'rotate(90deg)', transition: 'transform 120ms ease' }}
+                            >
+                              <ChevronRight size={14} />
+                            </button>
+                          ) : <span style={{ width: 18 }} />}
                           <strong>{unit.kode}</strong> — {unit.nama}
                           {isRootSatker && (
                             <small
@@ -293,7 +338,7 @@ export function KelolaUnit() {
                         </span>
                       </td>
                       <td>
-                        {unit.aktif && (
+                        {canAddChild && (
                           <button
                             className="ws-row-open"
                             aria-label={'Tambah unit anak di bawah ' + unit.nama}
@@ -303,16 +348,16 @@ export function KelolaUnit() {
                             <Plus size={16} />
                           </button>
                         )}
-                        {!isRootSatker ? (
-                          <>
-                            <button
-                              className="ws-row-open"
-                              aria-label={'Ubah unit ' + unit.nama}
-                              title={'Ubah unit ' + unit.nama}
-                              onClick={() => openEdit(unit)}
-                            >
-                              <Edit3 size={16} />
-                            </button>
+                        <>
+                          <button
+                            className="ws-row-open"
+                            aria-label={'Ubah unit ' + unit.nama}
+                            title={'Ubah unit ' + unit.nama}
+                            onClick={() => openEdit(unit)}
+                          >
+                            <Edit3 size={16} />
+                          </button>
+                          {!isRootSatker && (
                             <button
                               className="ws-row-open"
                               aria-label={'Pindah induk unit ' + unit.nama}
@@ -324,7 +369,8 @@ export function KelolaUnit() {
                             >
                               <Shuffle size={16} />
                             </button>
-                            {unit.aktif && (
+                          )}
+                            {(superAdmin || !isRootSatker) && unit.aktif && (
                               <button
                                 className="ws-row-open"
                                 aria-label={'Nonaktifkan unit ' + unit.nama}
@@ -334,18 +380,10 @@ export function KelolaUnit() {
                                 <Trash2 size={16} />
                               </button>
                             )}
-                          </>
-                        ) : (
-                          <span
-                            style={{
-                              fontSize: '0.8rem',
-                              color: 'var(--ws-text-muted, #94a3b8)',
-                              marginLeft: 4,
-                            }}
-                          >
-                            Hanya baca
-                          </span>
-                        )}
+                          {!superAdmin && isRootSatker && (
+                            <small>Akar SATKER: hanya kode dan nama yang dapat diubah.</small>
+                          )}
+                        </>
                       </td>
                     </tr>
                   )
@@ -362,11 +400,15 @@ export function KelolaUnit() {
           setCreating(false)
           setSelected(null)
         }}
-        title={creating ? 'Tambah unit anak' : 'Ubah unit'}
+        title={creating ? (superAdmin ? 'Tambah unit' : 'Tambah unit anak') : 'Ubah unit'}
         description={
           creating
-            ? 'Pilih unit induk dalam wilayah satker. Jenis unit hanya Bidang, Bagian, Subbidang, atau Subbagian.'
-            : 'Perbarui kode, nama, atau status keaktifan unit anak.'
+            ? superAdmin
+              ? 'Buat SATKER baru tanpa induk, atau pilih induk untuk menambahkan unit anak.'
+              : 'Pilih induk dalam SATKER yang menjadi wilayah Anda untuk menambahkan unit anak.'
+            : selectedIsRoot && !superAdmin
+              ? 'Admin Satker hanya dapat mengubah kode dan nama SATKER ini.'
+              : 'Perbarui identitas, jenis, dan status unit sesuai posisi hierarkinya.'
         }
       >
         <form className="ws-profile-form" onSubmit={submit} noValidate>
@@ -375,10 +417,10 @@ export function KelolaUnit() {
               <FieldSelect
                 id="unit-parent"
                 label="Unit induk"
-                emptyLabel="Pilih unit induk"
                 value={form.parent_id}
                 error={first('parent_id')}
                 options={parentOptions}
+                emptyLabel={superAdmin ? 'Tanpa induk (SATKER)' : 'Pilih unit induk'}
                 onChange={(value) =>
                   setForm((old) => ({ ...old, parent_id: value, jenis: '' }))
                 }
@@ -398,27 +440,27 @@ export function KelolaUnit() {
               error={first('nama')}
               onChange={(value) => setForm((old) => ({ ...old, nama: value }))}
             />
-            <div className="ws-profile-field">
-              <label htmlFor="unit-jenis">Jenis unit</label>
-              <select
-                id="unit-jenis"
-                value={form.jenis}
-                onChange={(event) =>
-                  setForm((old) => ({ ...old, jenis: event.target.value }))
-                }
-                disabled={save.isPending}
-              >
-                <option value="">Pilih jenis unit</option>
-                {kindOptions.map((kind) => (
-                  <option key={kind} value={kind}>
-                    {kind}
-                  </option>
-                ))}
-              </select>
-              {first('jenis') && <small role="alert">{first('jenis')}</small>}
-            </div>
+            {!(selectedIsRoot && !superAdmin && !creating) && (
+              <div className="ws-profile-field">
+                <label htmlFor="unit-jenis">Jenis unit</label>
+                <select
+                  id="unit-jenis"
+                  value={form.jenis}
+                  onChange={(event) => setForm((old) => ({ ...old, jenis: event.target.value }))}
+                  disabled={save.isPending || (selectedIsRoot && (!superAdmin || !creating))}
+                >
+                  <option value="">Pilih jenis unit</option>
+                  {kindOptions.map((kind) => (
+                    <option key={kind} value={kind}>
+                      {kind}
+                    </option>
+                  ))}
+                </select>
+                {first('jenis') && <small role="alert">{first('jenis')}</small>}
+              </div>
+            )}
             {!creating && (
-              <label>
+              !selectedIsRoot || superAdmin ? <label>
                 <input
                   type="checkbox"
                   checked={form.aktif}
@@ -427,7 +469,7 @@ export function KelolaUnit() {
                   }
                 />{' '}
                 Aktif
-              </label>
+              </label> : null
             )}
           </div>
           <div className="ws-profile-actions">
@@ -445,7 +487,11 @@ export function KelolaUnit() {
           setErrors({})
         }}
         title="Pindah induk unit"
-        description="Pilih induk baru yang berada dalam wilayah satker Anda."
+        description={
+          superAdmin
+            ? 'Pilih induk baru yang sesuai dengan aturan hierarki unit.'
+            : 'Pilih induk baru yang berada dalam wilayah satker Anda.'
+        }
       >
         <form
           className="ws-profile-form"

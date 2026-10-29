@@ -3,7 +3,6 @@
 namespace App\Http\Requests;
 
 use App\Services\KepatuhanService;
-use App\Services\ScopeUnit;
 use App\Services\TautanKepatuhanService;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -27,12 +26,16 @@ class KepatuhanRequest extends ApiRequest
         } elseif ($this->route('parent')) {
             $model = $service->query(KepatuhanService::PARENTS[$resource][0], $actor)->findOrFail($this->route('parent'));
         }
+        if ($resource === 'sop-versi' && $this->route('action') === 'review') {
+            Gate::forUser($actor)->authorize('kepatuhan.review-sop');
+        }
         if (! $this->isMethod('GET') && $this->route('action') !== 'review') {
             $admin = $this->isMethod('DELETE') || $this->route('action') === 'ajukan';
             if ($model) {
-                Gate::authorize('kepatuhan.write', [$service->unit($model), $admin]);
+                Gate::authorize('kepatuhan.write', [$service->unit($model), $admin, $resource]);
             } else {
-                abort_unless(app(ScopeUnit::class)->hasRole($actor, $admin ? ['ADMIN_SATKER'] : ['ADMIN_SATKER', 'STAFF']), 403, 'Hanya penyusun dapat membuat draft kepatuhan.');
+                $unit = (int) ($this->input('unit_id') ?? $this->input('unit_pemilik_id') ?? 0);
+                Gate::authorize('kepatuhan.write', [$unit, $admin, $resource]);
             }
         }
 
@@ -57,7 +60,9 @@ return $rules;
             return [];
         }
         if ($this->route('action') === 'review') {
-            return ['tahap' => ['required', Rule::in(['KASUB', 'KABID', 'KASATKER'])], 'keputusan' => ['required', Rule::in(['SETUJU', 'TOLAK'])], 'catatan' => ['sometimes', 'nullable', 'string', 'max:10000']];
+            $tahapan = $this->route('resource') === 'sop-versi' ? ['SUPER_ADMIN'] : ['KASUB', 'KABID', 'KASATKER'];
+
+            return ['tahap' => ['required', Rule::in($tahapan)], 'keputusan' => ['required', Rule::in(['SETUJU', 'TOLAK'])], 'catatan' => ['required_if:keputusan,TOLAK', 'nullable', 'string', 'max:10000']];
         }
         $required = $this->isMethod('POST') ? 'required' : 'sometimes';
         $text = [$required, 'string', 'max:10000'];

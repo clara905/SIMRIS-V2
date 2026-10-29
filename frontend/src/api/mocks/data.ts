@@ -196,8 +196,8 @@ async function save(name: (typeof moduleNames)[number], request: Request, id?: n
     db.unit = id ? db.unit.map((u) => (u.id === id ? value : u)) : [...db.unit, value]
   }
   if (name === 'pegawai') {
-    if (!/^\d{18}$/.test(String(body.nip)))
-      return validation('nip', 'NIP harus terdiri dari 18 angka.')
+    if (body.nip && !/^\d{1,18}$/.test(String(body.nip)))
+      return validation('nip', 'NIP hanya boleh berisi 1 sampai 18 digit angka.')
     if (db.pegawai.some((p) => p.nip === body.nip && p.id !== id))
       return validation('nip', 'NIP sudah terdaftar. Gunakan NIP yang berbeda.')
     const value = {

@@ -17,7 +17,11 @@ class AdminRequest extends ApiRequest
         if ($this->route('id')) {
             $model = $service->query($resource, $this->user())->findOrFail($this->route('id'));
             if (! $this->isMethod('GET')) {
-                Gate::authorize($this->isMethod('DELETE') ? 'admin.delete' : 'admin.update', [$model]);
+                if ($this->route('action') === 'lihat-nip') {
+                    Gate::authorize('admin.view', [$class]);
+                } else {
+                    Gate::authorize($this->isMethod('DELETE') ? 'admin.delete' : 'admin.update', [$model]);
+                }
             }
         } else {
             Gate::authorize($this->isMethod('GET') ? 'admin.view' : 'admin.create', [$class]);
@@ -31,6 +35,9 @@ class AdminRequest extends ApiRequest
         return [
             ...parent::messages(),
             'nip.unique' => 'NIP sudah terdaftar. Hubungi super admin untuk proses mutasi.',
+            'kode.unique' => 'Kode sudah digunakan.',
+            'username.unique' => 'Username sudah digunakan.',
+            'email_login.unique' => 'Email login sudah digunakan.',
         ];
     }
 
@@ -41,6 +48,9 @@ class AdminRequest extends ApiRequest
         }
         $resource = $this->route('resource');
         $action = $this->route('action');
+        if ($action === 'lihat-nip') {
+            return ['password' => ['required', 'string', 'max:255']];
+        }
         if ($action === 'reset-password') {
             return ['password' => ['required', 'string', 'min:12', 'max:255', 'confirmed']];
         }
@@ -58,10 +68,10 @@ class AdminRequest extends ApiRequest
 
         return match ($resource) {
             'users' => ['pegawai_id' => [$satkerAdmin && $this->isMethod('POST') ? 'required' : 'sometimes', 'nullable', 'integer', Rule::exists('PEGAWAI', 'id'), $unique('USERS', 'pegawai_id')], 'username' => [$required, 'string', 'max:255', 'regex:/^[A-Za-z0-9._-]+$/', $unique('USERS', 'username')], 'email_login' => [$required, 'email', 'max:255', $unique('USERS', 'email_login')], 'password' => $this->isMethod('POST') ? ['required', 'string', 'min:12', 'max:255', 'confirmed'] : ['prohibited'], 'aktif' => ['sometimes', 'boolean'], 'wajib_ganti_password' => ['prohibited'], 'password_hash' => ['prohibited']],
-            'user-role-scope' => ['user_id' => [$required, 'integer', Rule::exists('USERS', 'id')], 'role_id' => [$required, 'integer', Rule::exists('ROLES', 'id')], 'unit_id' => ['sometimes', 'nullable', 'integer', Rule::exists('UNIT_ORGANISASI', 'id')], 'mulai' => [$required, 'date'], 'selesai' => ['sometimes', 'nullable', 'date']],
+            'user-role-scope' => ['user_id' => [$required, 'integer', Rule::exists('USERS', 'id')], 'role_id' => [$required, 'integer', Rule::exists('ROLES', 'id')], 'unit_id' => [$satkerAdmin ? 'required' : 'sometimes', $satkerAdmin ? 'integer' : 'nullable', Rule::exists('UNIT_ORGANISASI', 'id')], 'mulai' => [$required, 'date'], 'selesai' => ['sometimes', 'nullable', 'date']],
             'unit-organisasi' => ['parent_id' => ['sometimes', 'nullable', 'integer', Rule::exists('UNIT_ORGANISASI', 'id')], 'kode' => [$required, 'string', 'max:255', $unique('UNIT_ORGANISASI', 'kode')], 'nama' => [$required, 'string', 'max:255'], 'jenis' => [$required, Rule::in(array_keys(config('aturan_unit')))], 'aktif' => ['sometimes', 'boolean']],
-            'pegawai' => ['nip' => ['sometimes', 'nullable', 'regex:/^[0-9]{18}$/', $unique('PEGAWAI', 'nip')], 'nama' => [$required, 'string', 'max:255'], 'email_kontak' => [$required, 'email', 'max:255'], 'jenis_kepegawaian' => [$required, 'string', 'max:255'], 'aktif' => ['sometimes', 'boolean']],
-            'penempatan-pegawai' => ['pegawai_id' => [$required, 'integer', Rule::exists('PEGAWAI', 'id')], 'unit_id' => [$required, 'integer', Rule::exists('UNIT_ORGANISASI', 'id')], 'mulai' => [$required, 'date_format:Y-m-d'], 'selesai' => ['sometimes', 'nullable', 'date_format:Y-m-d'], 'utama' => ['sometimes', 'boolean']],
+            'pegawai' => ['nip' => ['sometimes', 'nullable', 'regex:/^[0-9]{1,18}$/', $unique('PEGAWAI', 'nip')], 'nama' => [$required, 'string', 'max:255'], 'email_kontak' => [$required, 'email', 'max:255'], 'jenis_kepegawaian' => [$required, 'string', 'max:255'], 'aktif' => ['sometimes', 'boolean']],
+            'penempatan-pegawai' => ['pegawai_id' => [$required, 'integer', Rule::exists('PEGAWAI', 'id')], 'unit_id' => [$required, 'integer', Rule::exists('UNIT_ORGANISASI', 'id')], 'mulai' => [$required, 'date_format:Y-m-d'], 'selesai' => ['sometimes', 'nullable', 'date_format:Y-m-d'], 'utama' => $satkerAdmin ? ['prohibited'] : ['sometimes', 'boolean']],
             'periode-penilaian' => ['nama' => [$required, 'string', 'max:255'], 'tanggal_mulai' => [$required, 'date_format:Y-m-d'], 'tanggal_selesai' => [$required, 'date_format:Y-m-d']],
             'rencana-kerja' => ['kode' => [$required, 'string', 'max:255', $unique('RENCANA_KERJA', 'kode')], 'uraian_template' => [$required, 'string', 'max:10000']],
             default => [],

@@ -55,6 +55,59 @@ function satkerUserPayload(string $username, int $pegawaiId): array
     ];
 }
 
+test('admin satker may reveal NIP only for in-scope employees after confirming its own password', function (): void {
+    [$admin, $root] = satkerAdminFixture();
+    $employee = Pegawai::factory()->create(['nip' => '123456789012345678']);
+    PenempatanPegawai::factory()->create([
+        'pegawai_id' => $employee->id,
+        'unit_id' => $root->id,
+        'mulai' => today()->subDay(),
+    ]);
+    $otherRoot = UnitOrganisasi::factory()->create(['jenis' => 'SATKER', 'parent_id' => null]);
+    $otherEmployee = Pegawai::factory()->create(['nip' => '987654321098765432']);
+    PenempatanPegawai::factory()->create([
+        'pegawai_id' => $otherEmployee->id,
+        'unit_id' => $otherRoot->id,
+        'mulai' => today()->subDay(),
+    ]);
+    $this->actingAs($admin)->postJson('/api/pegawai/'.$employee->id.'/lihat-nip')
+        ->assertUnprocessable()->assertJsonValidationErrors('password');
+
+    satkerAdminSession($admin)->getJson('/api/pegawai?filter[nama]='.$employee->nama)
+        ->assertOk()->assertJsonPath('data.0.nip', str_repeat('•', 18));
+    satkerAdminSession($admin)->postJson('/api/pegawai/'.$otherEmployee->id.'/lihat-nip')
+        ->assertNotFound();
+
+    $this->postJson('/api/pegawai/'.$employee->id.'/lihat-nip', ['password' => 'password-testing'])
+        ->assertOk()->assertJsonPath('data.nip', '123456789012345678');
+});
+
+test('admin satker can permanently delete a scoped user and the role scope is audited', function (): void {
+    [$admin, $root] = satkerAdminFixture();
+    $employee = Pegawai::factory()->create();
+    PenempatanPegawai::factory()->create([
+        'pegawai_id' => $employee->id,
+        'unit_id' => $root->id,
+        'mulai' => today()->subDay(),
+    ]);
+    $user = User::factory()->create(['pegawai_id' => $employee->id]);
+    $scope = UserRoleScope::factory()->create([
+        'user_id' => $user->id,
+        'role_id' => Role::where('kode', 'STAFF')->value('id'),
+        'unit_id' => $root->id,
+    ]);
+
+    satkerAdminSession($admin)->deleteJson('/api/users/'.$user->id)->assertOk();
+
+    $this->assertDatabaseMissing('USERS', ['id' => $user->id]);
+    $this->assertDatabaseMissing('USER_ROLE_SCOPE', ['id' => $scope->id]);
+    $this->assertDatabaseHas('LOG_AUDIT', [
+        'entitas' => 'USER_ROLE_SCOPE',
+        'entitas_id' => $scope->id,
+        'aksi' => 'ROLE_CHANGE',
+    ]);
+});
+
 test('admin satker creates scoped user and grants each allowed role with marked audit', function (string $code): void {
     [$admin, $root] = satkerAdminFixture();
     $pegawai = Pegawai::factory()->create();
@@ -65,7 +118,11 @@ test('admin satker creates scoped user and grants each allowed role with marked 
         ->assertJsonPath('data.wajib_ganti_password', true)
         ->json('data.id');
 
-    satkerAdminSession($admin)->getJson('/api/users')->assertOk()->assertJsonFragment(['id' => $userId])->assertJsonFragment(['username' => 'satker-'.$code]);
+    satkerAdminSession($admin)->getJson('/api/users?filter[pegawai_id]='.$pegawai->id)
+        ->assertOk()
+        ->assertJsonFragment(['id' => $userId])
+        ->assertJsonFragment(['username' => 'satker-'.$code])
+        ->assertJsonPath('data.0.penempatan_aktif.0.unit_id', $root->id);
 
     $role = Role::where('kode', $code)->firstOrFail();
     $scopeId = satkerAdminSession($admin)->postJson('/api/user-role-scope', [
@@ -76,11 +133,28 @@ test('admin satker creates scoped user and grants each allowed role with marked 
     ])->assertCreated()->json('data.id');
 
     $audit = DB::table('LOG_AUDIT')->where('entitas', 'USER_ROLE_SCOPE')->where('entitas_id', $scopeId)->where('aksi', 'ROLE_CHANGE')->first();
-    $expectedAudit = ['oleh_admin_satker' => true, 'role' => $code];
+    expect(DB::table('LOG_AUDIT')->where('entitas', 'USER_ROLE_SCOPE')->where('entitas_id', $scopeId)->count())->toBe(1);
+    $expectedAudit = ['oleh_admin_satker' => true, 'peran' => $code];
     if ($code === 'KASATKER') {
-        $expectedAudit['perubahan_kasatker'] = true;
+        $expectedAudit['penanda'] = 'KASATKER_DIBERIKAN';
     }
     expect(json_decode($audit->data_baru, true))->toMatchArray($expectedAudit);
+    if ($code === 'KASATKER') {
+        satkerAdminSession($admin)->deleteJson('/api/user-role-scope/'.$scopeId)->assertOk();
+        $revokeAudit = DB::table('LOG_AUDIT')->where('entitas', 'USER_ROLE_SCOPE')->where('entitas_id', $scopeId)->where('aksi', 'ROLE_CHANGE')->orderByDesc('id')->first();
+        expect(json_decode($revokeAudit->data_baru, true))->toMatchArray([
+            'oleh_admin_satker' => true,
+            'peran' => 'KASATKER',
+            'penanda' => 'KASATKER_DICABUT',
+        ]);
+        expect(DB::table('LOG_AUDIT')->where('entitas', 'USER_ROLE_SCOPE')->where('entitas_id', $scopeId)->count())->toBe(2);
+    }
+    satkerAdminSession($admin)->postJson('/api/users/'.$userId.'/reset-password', [
+        'password' => 'Reset-password-123',
+        'password_confirmation' => 'Reset-password-123',
+    ])->assertOk();
+    $passwordAudit = DB::table('LOG_AUDIT')->where('entitas', 'USERS')->where('entitas_id', $userId)->where('aksi', 'PASSWORD_RESET')->first();
+    expect(json_decode($passwordAudit->data_baru, true))->toMatchArray(['oleh_admin_satker' => true]);
 })->with(['STAFF', 'KASUB', 'KABID', 'KASATKER']);
 
 test('admin satker cannot grant privileged roles or roles outside its unit scope', function (): void {
@@ -100,6 +174,13 @@ test('admin satker cannot grant privileged roles or roles outside its unit scope
     }
 
     $outside = UnitOrganisasi::factory()->create(['jenis' => 'SATKER', 'parent_id' => null]);
+    satkerAdminSession($admin)->postJson('/api/user-role-scope', [
+        'user_id' => $target->id,
+        'role_id' => Role::where('kode', 'STAFF')->value('id'),
+        'unit_id' => null,
+        'mulai' => today()->toDateString(),
+    ])->assertUnprocessable()->assertJsonValidationErrors(['unit_id']);
+
     satkerAdminSession($admin)->postJson('/api/user-role-scope', [
         'user_id' => $target->id,
         'role_id' => Role::where('kode', 'STAFF')->value('id'),
@@ -151,18 +232,36 @@ test('admin satker cannot manage self or privileged accounts', function (): void
     ])->assertNotFound();
 });
 
-test('admin satker can manage child units in scope but cannot manage root or move outside scope', function (): void {
+test('admin satker can manage its own satker metadata and child units but cannot access another satker', function (): void {
     [$admin, $root] = satkerAdminFixture();
 
-    // 1. Ditolak membuat unit akar / berjenis SATKER
+    // Admin Satker hanya boleh mengelola struktur di bawah SATKER yang diberikan kepadanya.
     satkerAdminSession($admin)->postJson('/api/unit-organisasi', [
         'parent_id' => null,
         'kode' => 'SATKER-ROOT-NEW',
         'nama' => 'Root baru',
         'jenis' => 'SATKER',
     ])->assertConflict()->assertJsonPath('code', 'induk_di_luar_scope');
+    $otherRoot = UnitOrganisasi::factory()->create(['jenis' => 'SATKER', 'parent_id' => null]);
+    satkerAdminSession($admin)->getJson('/api/unit-organisasi/'.$otherRoot->id)->assertNotFound();
+    satkerAdminSession($admin)->patchJson('/api/unit-organisasi/'.$otherRoot->id, ['nama' => 'Satker asing'])
+        ->assertNotFound();
 
-    // 2. Berhasil membuat unit anak (BIDANG) di bawah satkernya
+    // Admin Satker boleh memperbarui identitas dasar SATKER sendiri saja.
+    satkerAdminSession($admin)->patchJson('/api/unit-organisasi/'.$root->id, [
+        'kode' => 'SATKER-OWN-UPDATED',
+        'nama' => 'Satker Sendiri Diperbarui',
+    ])->assertOk()->assertJsonPath('data.nama', 'Satker Sendiri Diperbarui');
+    satkerAdminSession($admin)->patchJson('/api/unit-organisasi/'.$root->id, ['aktif' => false])
+        ->assertConflict()->assertJsonPath('code', 'unit_satker_dilindungi');
+    satkerAdminSession($admin)->patchJson('/api/unit-organisasi/'.$root->id, ['jenis' => 'BIDANG'])
+        ->assertConflict()->assertJsonPath('code', 'unit_satker_dilindungi');
+    satkerAdminSession($admin)->postJson('/api/unit-organisasi/'.$root->id.'/pindah-induk', ['parent_id' => null])
+        ->assertConflict()->assertJsonPath('code', 'unit_satker_dilindungi');
+    satkerAdminSession($admin)->deleteJson('/api/unit-organisasi/'.$root->id)
+        ->assertConflict()->assertJsonPath('code', 'unit_satker_dilindungi');
+
+    // Berhasil membuat unit anak (BIDANG) di bawah satkernya.
     $bidang = satkerAdminSession($admin)->postJson('/api/unit-organisasi', [
         'parent_id' => $root->id,
         'kode' => 'BID-01',
@@ -175,16 +274,14 @@ test('admin satker can manage child units in scope but cannot manage root or mov
         'nama' => 'Bidang Pengujian Diperbarui',
     ])->assertOk()->assertJsonPath('data.nama', 'Bidang Pengujian Diperbarui');
 
-    // 4. Ditolak mengubah atau menonaktifkan unit SATKER akar miliknya
-    satkerAdminSession($admin)->patchJson('/api/unit-organisasi/'.$root->id, ['nama' => 'Ubah root'])
-        ->assertConflict()->assertJsonPath('code', 'unit_satker_dilindungi');
-    satkerAdminSession($admin)->patchJson('/api/unit-organisasi/'.$root->id, ['aktif' => false])
-        ->assertConflict()->assertJsonPath('code', 'unit_satker_dilindungi');
-    satkerAdminSession($admin)->deleteJson('/api/unit-organisasi/'.$root->id)
-        ->assertConflict()->assertJsonPath('code', 'unit_satker_dilindungi');
-
     // 5. Ditolak memindahkan unit anak ke luar wilayah atau ke null
-    $otherRoot = UnitOrganisasi::factory()->create(['jenis' => 'SATKER', 'parent_id' => null]);
+    UnitOrganisasi::factory()->create(['jenis' => 'SATKER', 'parent_id' => null, 'kode' => 'RAHASIA-SATKER-B']);
+    satkerAdminSession($admin)->postJson('/api/unit-organisasi', [
+        'parent_id' => $root->id,
+        'kode' => 'RAHASIA-SATKER-B',
+        'nama' => 'Unit uji kode global',
+        'jenis' => 'BIDANG',
+    ])->assertUnprocessable()->assertJsonPath('errors.kode.0', 'Kode sudah digunakan.');
     $resNull = satkerAdminSession($admin)->postJson('/api/unit-organisasi/'.$bidang['id'].'/pindah-induk', ['parent_id' => null]);
     $resNull->assertConflict();
     expect(in_array($resNull->json('code'), ['induk_di_luar_scope', 'level_unit_tidak_valid'], true))->toBeTrue();
@@ -233,11 +330,11 @@ test('admin satker cannot place employee outside scope and cannot mutate employe
     ])->assertConflict()->assertJsonPath('code', 'unit_di_luar_scope');
 
     // 2. Berhasil menempatkan ke unit di wilayahnya
-    $penempatan = satkerAdminSession($admin)->postJson('/api/penempatan-pegawai', [
+    satkerAdminSession($admin)->postJson('/api/penempatan-pegawai', [
         'pegawai_id' => $localPegawai->id,
         'unit_id' => $root->id,
         'mulai' => today()->toDateString(),
-    ])->assertCreated()->json('data');
+    ])->assertCreated();
 
     // 3. Pegawai yang memiliki penempatan aktif di satker lain tidak boleh dimutasi oleh admin satker
     $foreignPegawai = Pegawai::factory()->create();
@@ -254,10 +351,59 @@ test('admin satker cannot place employee outside scope and cannot mutate employe
         'mulai' => today()->toDateString(),
     ])->assertConflict()->assertJsonPath('code', 'mutasi_lintas_satker_dilarang');
 
-    // 4. Mengakhiri penempatan di wilayahnya berhasil
-    satkerAdminSession($admin)->patchJson('/api/penempatan-pegawai/'.$penempatan['id'], [
+    $sub = UnitOrganisasi::factory()->create(['jenis' => 'BIDANG', 'parent_id' => $root->id]);
+    $newPlacement = satkerAdminSession($admin)->postJson('/api/penempatan-pegawai', [
+        'pegawai_id' => $localPegawai->id,
+        'unit_id' => $sub->id,
+        'mulai' => today()->addDay()->toDateString(),
+    ])->assertCreated()->json('data');
+    expect($newPlacement['utama'])->toBeTrue();
+    $this->assertDatabaseHas('PENEMPATAN_PEGAWAI', [
+        'pegawai_id' => $localPegawai->id,
+        'unit_id' => $root->id,
         'selesai' => today()->toDateString(),
-    ])->assertOk()->assertJsonPath('data.selesai', today()->toDateString());
+    ]);
+    satkerAdminSession($admin)->postJson('/api/penempatan-pegawai', [
+        'pegawai_id' => $localPegawai->id,
+        'unit_id' => $sub->id,
+        'mulai' => today()->toDateString(),
+        'selesai' => today()->addDays(2)->toDateString(),
+    ])->assertConflict()->assertJsonPath('code', 'penempatan_tumpang_tindih');
+    satkerAdminSession($admin)->postJson('/api/penempatan-pegawai', [
+        'pegawai_id' => $localPegawai->id,
+        'unit_id' => $sub->id,
+        'mulai' => today()->addDays(3)->toDateString(),
+        'utama' => false,
+    ])->assertUnprocessable()->assertJsonValidationErrors(['utama']);
+});
+
+test('placement edits reject closed-range overlap and preserve the original placement', function (): void {
+    [$admin, $root] = satkerAdminFixture();
+    $child = UnitOrganisasi::factory()->create(['jenis' => 'BIDANG', 'parent_id' => $root->id]);
+    $pegawai = Pegawai::factory()->create();
+    $first = satkerAdminSession($admin)->postJson('/api/penempatan-pegawai', [
+        'pegawai_id' => $pegawai->id,
+        'unit_id' => $root->id,
+        'mulai' => today()->subDays(10)->toDateString(),
+        'selesai' => today()->subDays(5)->toDateString(),
+    ])->assertCreated()->json('data');
+    satkerAdminSession($admin)->postJson('/api/penempatan-pegawai', [
+        'pegawai_id' => $pegawai->id,
+        'unit_id' => $child->id,
+        'mulai' => today()->addDay()->toDateString(),
+        'selesai' => today()->addDays(5)->toDateString(),
+    ])->assertCreated();
+
+    satkerAdminSession($admin)->patchJson('/api/penempatan-pegawai/'.$first['id'], [
+        'unit_id' => $child->id,
+        'selesai' => today()->addDays(2)->toDateString(),
+    ])->assertConflict()->assertJsonPath('code', 'penempatan_tumpang_tindih');
+    expect((int) $first['unit_id'])->toBe($root->id);
+    $this->assertDatabaseHas('PENEMPATAN_PEGAWAI', [
+        'id' => $first['id'],
+        'unit_id' => $root->id,
+        'selesai' => today()->subDays(5)->toDateString(),
+    ]);
 });
 
 test('duplicate employee NIP validation message does not leak other satker information', function (): void {

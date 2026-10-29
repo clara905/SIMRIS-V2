@@ -32,6 +32,11 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function (): void {
     Route::get('/unit-organisasi/pohon', [$controller, 'tree'])->defaults('resource', 'unit-organisasi');
     Route::get('/unit-organisasi/jenis', [$controller, 'unitKinds']);
     Route::get('/pegawai/{id}/jalur', [$controller, 'path'])->whereNumber('id')->defaults('resource', 'pegawai');
+    Route::post('/pegawai/{id}/lihat-nip', [$controller, 'revealNip'])
+        ->whereNumber('id')
+        ->defaults('resource', 'pegawai')
+        ->defaults('action', 'lihat-nip')
+        ->middleware('throttle:6,1');
     foreach (AdminService::MODELS as $resource => $class) {
         Route::get('/'.$resource, [$controller, 'index'])->defaults('resource', $resource);
         Route::get('/'.$resource.'/{id}', [$controller, 'show'])->whereNumber('id')->defaults('resource', $resource);

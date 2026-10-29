@@ -2,10 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { api, errorMessage, fieldErrors } from '../../api/client'
+import { revealNip } from '../../api/auth'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Drawer } from '../../components/Drawer'
 import { byKodeNama, dateOnly, getOptions, getPage, type Option, type Row } from './api'
-import { CalendarX2, Edit3, Plus, RefreshCw, UserRound } from 'lucide-react'
+import { CalendarX2, Edit3, Plus, RefreshCw, Trash2, UserRound } from 'lucide-react'
 
 type EmployeeForm = {
   nip: string
@@ -56,12 +57,15 @@ const JENIS_KEPEGAWAIAN_OPTIONS = [
   { value: 'NON_ASN', label: 'Non-ASN / Honorer' },
 ]
 
-export function KelolaPegawai() {
+export function KelolaPegawai({ superAdmin = false }: { superAdmin?: boolean }) {
   const client = useQueryClient()
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState<Row | null>(null)
   const [creating, setCreating] = useState(false)
-  const [deactivating, setDeactivating] = useState<Row | null>(null)
+  const [deleting, setDeleting] = useState<Row | null>(null)
+  const [revealTarget, setRevealTarget] = useState<Row | null>(null)
+  const [nipPassword, setNipPassword] = useState('')
+  const [revealedNips, setRevealedNips] = useState<Record<number, string>>({})
   const [form, setForm] = useState<EmployeeForm>(blank)
   const [errors, setErrors] = useState<Record<string, string[]>>({})
 
@@ -77,6 +81,7 @@ export function KelolaPegawai() {
   })
 
   const refresh = () => {
+    setRevealedNips({})
     void client.invalidateQueries({ queryKey: ['satker', 'pegawai'] })
     void client.invalidateQueries({ queryKey: ['satker', 'opt', 'pegawai'] })
     void client.invalidateQueries({ queryKey: ['satker', 'users', 'employees'] })
@@ -90,8 +95,8 @@ export function KelolaPegawai() {
     if (!form.nama.trim()) next.nama = ['Nama wajib diisi.']
     if (!form.email_kontak.trim()) next.email_kontak = ['Email kontak wajib diisi.']
     if (!form.jenis_kepegawaian) next.jenis_kepegawaian = ['Pilih jenis kepegawaian.']
-    if (form.nip.trim() && !/^\d{18}$/.test(form.nip.trim())) {
-      next.nip = ['NIP harus berupa 18 digit angka jika diisi.']
+    if (form.nip.trim() && !/^\d{1,18}$/.test(form.nip.trim())) {
+      next.nip = ['NIP hanya boleh berisi 1 sampai 18 digit angka.']
     }
     if (!form.unit_id) next.unit_id = ['Pilih unit penempatan awal di wilayah satker.']
     if (!form.mulai) next.mulai = ['Tanggal mulai penempatan wajib diisi.']
@@ -149,7 +154,7 @@ export function KelolaPegawai() {
     mutationFn: async () => {
       if (!selected) return
       const body = {
-        nip: form.nip.trim() || null,
+        ...(form.nip.trim() ? { nip: form.nip.trim() } : {}),
         nama: form.nama.trim(),
         email_kontak: form.email_kontak.trim(),
         jenis_kepegawaian: form.jenis_kepegawaian,
@@ -176,8 +181,8 @@ export function KelolaPegawai() {
     if (!form.nama.trim()) next.nama = ['Nama wajib diisi.']
     if (!form.email_kontak.trim()) next.email_kontak = ['Email kontak wajib diisi.']
     if (!form.jenis_kepegawaian) next.jenis_kepegawaian = ['Pilih jenis kepegawaian.']
-    if (form.nip.trim() && !/^\d{18}$/.test(form.nip.trim())) {
-      next.nip = ['NIP harus berupa 18 digit angka jika diisi.']
+    if (form.nip.trim() && !/^\d{1,18}$/.test(form.nip.trim())) {
+      next.nip = ['NIP hanya boleh berisi 1 sampai 18 digit angka.']
     }
     if (Object.keys(next).length) {
       setErrors(next)
@@ -187,16 +192,33 @@ export function KelolaPegawai() {
     updatePegawai.mutate()
   }
 
-  const deactivate = useMutation({
+  const removePegawai = useMutation({
     mutationFn: async () => {
-      if (deactivating) await api.delete('/api/pegawai/' + deactivating.id)
+      if (deleting) await api.delete('/api/pegawai/' + deleting.id)
     },
     onSuccess: () => {
-      toast.success('Pegawai dinonaktifkan.')
-      setDeactivating(null)
+      toast.success('Pegawai berhasil dihapus.')
+      setDeleting(null)
       refresh()
     },
     onError: (error) => toast.error(errorMessage(error)),
+  })
+
+  const reveal = useMutation({
+    mutationFn: async () => {
+      if (!revealTarget) return ''
+      return revealNip(revealTarget.id, nipPassword)
+    },
+    onSuccess: (nip) => {
+      if (revealTarget) setRevealedNips((current) => ({ ...current, [revealTarget.id]: nip }))
+      setRevealTarget(null)
+      setNipPassword('')
+      setErrors({})
+    },
+    onError: (error) => {
+      setErrors(fieldErrors(error))
+      toast.error(errorMessage(error))
+    },
   })
 
   const startNew = () => {
@@ -216,7 +238,7 @@ export function KelolaPegawai() {
     setSelected(row)
     setErrors({})
     setForm({
-      nip: stringOf(row.nip),
+      nip: '',
       nama: stringOf(row.nama),
       email_kontak: stringOf(row.email_kontak),
       jenis_kepegawaian: stringOf(row.jenis_kepegawaian) || 'PNS',
@@ -238,10 +260,12 @@ export function KelolaPegawai() {
     <>
       <div className="ws-page-heading">
         <div>
-          <span className="ws-eyebrow">Pengelolaan satker</span>
+          <span className="ws-eyebrow">{superAdmin ? 'Organisasi' : 'Pengelolaan satker'}</span>
           <h1>Kelola pegawai &amp; penempatan</h1>
           <p>
-            Kelola identitas pegawai dan riwayat penempatannya pada unit dalam wilayah satker Anda.
+            {superAdmin
+              ? 'Kelola data pegawai dan riwayat penempatan pada seluruh unit organisasi.'
+              : 'Kelola identitas pegawai dan riwayat penempatannya pada unit dalam wilayah satker Anda.'}
           </p>
         </div>
         <button className="primary" onClick={startNew}>
@@ -251,7 +275,7 @@ export function KelolaPegawai() {
 
       <section className="ws-panel">
         <div className="ws-register-tools">
-          <strong>Daftar pegawai</strong>
+          <strong>{superAdmin ? 'Seluruh pegawai' : 'Daftar pegawai satker'}</strong>
           <button
             className="ws-refresh"
             aria-label="Perbarui pegawai"
@@ -276,7 +300,11 @@ export function KelolaPegawai() {
           <div className="ws-empty">
             <UserRound size={28} />
             <strong>Belum ada pegawai</strong>
-            <p>Tambahkan pegawai baru beserta penempatan aktifnya di wilayah satker.</p>
+            <p>
+              {superAdmin
+                ? 'Tambahkan pegawai baru beserta penempatan aktifnya.'
+                : 'Tambahkan pegawai baru beserta penempatan aktifnya di wilayah satker.'}
+            </p>
           </div>
         ) : (
           <>
@@ -285,7 +313,7 @@ export function KelolaPegawai() {
                 <thead>
                   <tr>
                     <th>Nama</th>
-                    <th>NIP</th>
+                    <th>NIP (tersensor)</th>
                     <th>Email kontak</th>
                     <th>Jenis</th>
                     <th>Status</th>
@@ -298,7 +326,31 @@ export function KelolaPegawai() {
                     return (
                       <tr key={row.id}>
                         <td>{stringOf(row.nama)}</td>
-                        <td>{stringOf(row.nip) || '-'}</td>
+                        <td>
+                          {revealedNips[row.id] ?? (stringOf(row.nip) || '-')}
+                          {row.nip_tersedia === true && (
+                            <button
+                              type="button"
+                              className="ws-row-open"
+                              aria-label={revealedNips[row.id] ? 'Sensor NIP' : 'Lihat NIP'}
+                              onClick={() => {
+                                if (revealedNips[row.id]) {
+                                  setRevealedNips((current) => {
+                                    const next = { ...current }
+                                    delete next[row.id]
+                                    return next
+                                  })
+                                } else {
+                                  setRevealTarget(row)
+                                  setNipPassword('')
+                                  setErrors({})
+                                }
+                              }}
+                            >
+                              {revealedNips[row.id] ? 'Sensor' : 'Lihat'}
+                            </button>
+                          )}
+                        </td>
                         <td>{stringOf(row.email_kontak) || '-'}</td>
                         <td>{stringOf(row.jenis_kepegawaian) || '-'}</td>
                         <td>
@@ -316,16 +368,14 @@ export function KelolaPegawai() {
                           >
                             <Edit3 size={16} />
                           </button>
-                          {active && (
-                            <button
-                              className="ws-row-open"
-                              aria-label={'Nonaktifkan pegawai ' + row.nama}
-                              title={'Nonaktifkan pegawai ' + row.nama}
-                              onClick={() => setDeactivating(row)}
-                            >
-                              ×
-                            </button>
-                          )}
+                          <button
+                            className="ws-row-open"
+                            aria-label={'Hapus pegawai ' + row.nama}
+                            title={'Hapus pegawai ' + row.nama}
+                            onClick={() => setDeleting(row)}
+                          >
+                            <Trash2 size={16} />
+                          </button>
                         </td>
                       </tr>
                     )
@@ -338,7 +388,13 @@ export function KelolaPegawai() {
                 {data.meta.from || 0}-{data.meta.to || 0} dari {data.meta.total} pegawai
               </span>
               <div>
-                <button disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>
+                <button
+                  disabled={page <= 1}
+                  onClick={() => {
+                    setRevealedNips({})
+                    setPage((value) => value - 1)
+                  }}
+                >
                   Sebelumnya
                 </button>
                 <span>
@@ -346,7 +402,10 @@ export function KelolaPegawai() {
                 </span>
                 <button
                   disabled={page >= data.meta.last_page}
-                  onClick={() => setPage((value) => value + 1)}
+                  onClick={() => {
+                    setRevealedNips({})
+                    setPage((value) => value + 1)
+                  }}
                 >
                   Berikutnya
                 </button>
@@ -360,15 +419,21 @@ export function KelolaPegawai() {
         open={creating}
         onClose={close}
         title="Tambah pegawai &amp; penempatan"
-        description="Pegawai baru wajib langsung diberi penempatan aktif pada salah satu unit di wilayah satker Anda."
+        description={
+          superAdmin
+            ? 'Pegawai baru wajib langsung diberi penempatan aktif pada salah satu unit organisasi.'
+            : 'Pegawai baru wajib langsung diberi penempatan aktif pada salah satu unit di wilayah satker Anda.'
+        }
       >
         <form className="ws-profile-form" onSubmit={handleCreateSubmit} noValidate>
           <div className="ws-profile-form-grid">
             <Input
               id="employee-nip"
-              label="NIP (opsional, 18 digit)"
+              label="NIP (opsional, maksimal 18 digit)"
               value={form.nip}
               error={firstError(errors, 'nip')}
+              maxLength={18}
+              inputMode="numeric"
               disabled={saving}
               onChange={(value) => setForm((old) => ({ ...old, nip: value }))}
             />
@@ -477,9 +542,11 @@ export function KelolaPegawai() {
               <div className="ws-profile-form-grid">
                 <Input
                   id="edit-nip"
-                  label="NIP (opsional, 18 digit)"
+                  label="NIP baru (kosongkan untuk mempertahankan, maksimal 18 digit)"
                   value={form.nip}
                   error={firstError(errors, 'nip')}
+                  maxLength={18}
+                  inputMode="numeric"
                   disabled={updatePegawai.isPending}
                   onChange={(value) => setForm((old) => ({ ...old, nip: value }))}
                 />
@@ -544,17 +611,57 @@ export function KelolaPegawai() {
         )}
       </Drawer>
 
+      <Drawer
+        open={!!revealTarget}
+        onClose={() => {
+          setRevealTarget(null)
+          setNipPassword('')
+          setErrors({})
+        }}
+        title="Konfirmasi untuk melihat NIP"
+        description="Masukkan password akun Anda. NIP hanya ditampilkan setelah password terverifikasi."
+      >
+        <form
+          className="ws-profile-form"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (!nipPassword) {
+              setErrors({ password: ['Masukkan password akun Anda.'] })
+              return
+            }
+            setErrors({})
+            reveal.mutate()
+          }}
+          noValidate
+        >
+          <Input
+            id="reveal-nip-password"
+            label="Password akun Anda"
+            type="password"
+            value={nipPassword}
+            error={firstError(errors, 'password')}
+            disabled={reveal.isPending}
+            onChange={setNipPassword}
+          />
+          <div className="ws-profile-actions">
+            <button className="primary" disabled={reveal.isPending}>
+              {reveal.isPending ? 'Memverifikasi...' : 'Verifikasi & lihat NIP'}
+            </button>
+          </div>
+        </form>
+      </Drawer>
+
       <ConfirmDialog
-        open={!!deactivating}
-        onClose={() => setDeactivating(null)}
-        title="Nonaktifkan pegawai?"
+        open={!!deleting}
+        onClose={() => setDeleting(null)}
+        title="Hapus pegawai permanen?"
         description={[
-          `Pegawai ${stringOf(deactivating?.nama)} akan dinonaktifkan.`,
-          'Riwayat pegawai dan penempatan tetap tersimpan di sistem.',
+          `Pegawai ${stringOf(deleting?.nama)} akan dihapus permanen.`,
+          'Penghapusan ditolak jika pegawai masih memiliki penempatan atau dirujuk data operasional.',
         ]}
-        confirmLabel="Nonaktifkan"
-        pending={deactivate.isPending}
-        onConfirm={() => deactivate.mutateAsync()}
+        confirmLabel="Hapus pegawai"
+        pending={removePegawai.isPending}
+        onConfirm={() => removePegawai.mutateAsync()}
       />
     </>
   )
@@ -567,6 +674,8 @@ function Input({
   error,
   type = 'text',
   disabled,
+  maxLength,
+  inputMode,
   onChange,
 }: {
   id: string
@@ -575,6 +684,8 @@ function Input({
   error?: string
   type?: string
   disabled?: boolean
+  maxLength?: number
+  inputMode?: 'numeric' | 'text'
   onChange: (value: string) => void
 }) {
   return (
@@ -585,6 +696,8 @@ function Input({
         type={type}
         value={value}
         disabled={disabled}
+        maxLength={maxLength}
+        inputMode={inputMode}
         onChange={(event) => onChange(event.target.value)}
       />
       {error && <small role="alert">{error}</small>}

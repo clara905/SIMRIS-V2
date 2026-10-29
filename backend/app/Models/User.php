@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Exceptions\BusinessRuleException;
 use App\Models\Concerns\Auditable;
 use App\Models\Concerns\SerializesLocalDates;
 use Database\Factories\UserFactory;
@@ -33,8 +32,4 @@ class User extends Authenticatable
         return ['password_hash' => 'hashed', 'aktif' => 'boolean', 'wajib_ganti_password' => 'boolean'];
     }
 
-    protected static function booted(): void
-    {
-        static::deleting(fn () => throw new BusinessRuleException('hapus_fisik_dilarang', 'Gunakan penonaktifan untuk menjaga riwayat data.'));
-    }
 }

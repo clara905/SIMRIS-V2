@@ -33,7 +33,13 @@ class ScopeUnit
         $ids = [];
         if ($user->aktif) {
             $units = DB::table('UNIT_ORGANISASI')->get(['id', 'parent_id']);
-            $ids = $this->isSuper($user) ? $units->pluck('id')->map(fn ($id) => (int) $id)->all() : $this->roles($user)->whereNotNull('unit_id')->pluck('unit_id')->map(fn ($id) => (int) $id)->unique()->values()->all();
+            $activeRoles = $this->roles($user);
+            $baseRoles = $this->isSuper($user)
+                ? $activeRoles
+                : ($activeRoles->contains(fn ($role) => $role->kode === 'ADMIN_SATKER')
+                    ? $activeRoles->where('kode', 'ADMIN_SATKER')
+                    : $activeRoles);
+            $ids = $this->isSuper($user) ? $units->pluck('id')->map(fn ($id) => (int) $id)->all() : $baseRoles->whereNotNull('unit_id')->pluck('unit_id')->map(fn ($id) => (int) $id)->unique()->values()->all();
             do {
                 $before = count($ids);
                 foreach ($units as $unit) {

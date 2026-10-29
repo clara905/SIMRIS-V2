@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Validation\Rule;
 
 class AuthController extends Controller
 {
@@ -115,26 +116,31 @@ class AuthController extends Controller
         $user = $request->user();
         $validated = $request->validate([
             'nama' => ['required', 'string', 'max:255'],
-            'email_kontak' => ['required', 'email', 'max:255'],
+            'email' => ['required', 'email', 'max:255', Rule::unique('USERS', 'email_login')->ignore($user->id)],
             'nip' => ['nullable', 'string', 'max:18'],
             'jenis_kepegawaian' => ['nullable', 'string', 'max:255'],
         ]);
+        if (isset($validated['nip']) && ! ctype_digit($validated['nip'])) {
+            throw ValidationException::withMessages(['nip' => ['NIP hanya boleh berisi angka.']]);
+        }
 
         $updatedUser = DB::transaction(function () use ($user, $validated, $audit) {
             $userModel = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
             $pegawai = $userModel->pegawai_id ? \App\Models\Pegawai::find($userModel->pegawai_id) : null;
+            $userModel->email_login = $validated['email'];
+            $userModel->save();
 
             if ($pegawai) {
                 $pegawai->update([
                     'nama' => $validated['nama'],
-                    'email_kontak' => $validated['email_kontak'],
+                    'email_kontak' => $validated['email'],
                     'nip' => $validated['nip'] ?? $pegawai->nip,
                     'jenis_kepegawaian' => $validated['jenis_kepegawaian'] ?? $pegawai->jenis_kepegawaian,
                 ]);
             } else {
                 $newPegawai = \App\Models\Pegawai::create([
                     'nama' => $validated['nama'],
-                    'email_kontak' => $validated['email_kontak'],
+                    'email_kontak' => $validated['email'],
                     'nip' => $validated['nip'] ?? null,
                     'jenis_kepegawaian' => $validated['jenis_kepegawaian'] ?? 'PNS',
                     'aktif' => true,
