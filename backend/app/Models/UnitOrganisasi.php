@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use App\Exceptions\BusinessRuleException;
 use App\Models\Concerns\Auditable;
 use App\Models\Concerns\SerializesLocalDates;
 use Database\Factories\UnitOrganisasiFactory;
@@ -33,15 +32,5 @@ class UnitOrganisasi extends Model
         return [
             'aktif' => 'boolean',
         ];
-    }
-
-    protected static function booted(): void
-    {
-        static::deleting(
-            fn () => throw new BusinessRuleException(
-                'hapus_fisik_dilarang',
-                'Gunakan penonaktifan untuk menjaga riwayat data.'
-            )
-        );
     }
 }

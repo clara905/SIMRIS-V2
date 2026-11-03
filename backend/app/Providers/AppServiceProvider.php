@@ -203,6 +203,10 @@ class AppServiceProvider extends ServiceProvider
             'audit.view',
             fn (User $user) => app(ScopeUnit::class)->isSuper($user)
         );
+        Gate::define(
+            'audit.delete',
+            fn (User $user) => app(ScopeUnit::class)->isSuper($user)
+        );
 
         Gate::define(
             'viewApiDocs',

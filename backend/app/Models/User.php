@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use App\Exceptions\BusinessRuleException;
 use App\Models\Concerns\Auditable;
 use App\Models\Concerns\SerializesLocalDates;
 use Database\Factories\UserFactory;
@@ -24,7 +23,7 @@ class User extends Authenticatable
     use HasFactory;
     use Notifiable;
 
-    protected $table = 'users';
+    protected $table = 'USERS';
 
     protected $fillable = [
         'pegawai_id',
@@ -75,15 +74,5 @@ class User extends Authenticatable
     public function penugasanAktif(): HasMany
     {
         return $this->penugasan()->aktif();
-    }
-
-    protected static function booted(): void
-    {
-        static::deleting(function () {
-            throw new BusinessRuleException(
-                'hapus_fisik_dilarang',
-                'Gunakan penonaktifan untuk menjaga riwayat data.'
-            );
-        });
     }
 }

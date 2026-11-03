@@ -1,6 +1,5 @@
 <?php
 
-use App\Exceptions\BusinessRuleException;
 use App\Models\Pegawai;
 use App\Models\PenempatanPegawai;
 use App\Models\PeriodePenilaian;
@@ -31,7 +30,7 @@ function adminSession(User $user): mixed
 {
     return test()->actingAs($user)->withSession(['auth.password_confirmed_at' => now()->timestamp]);
 }
-test('super admin can create, edit, move, and deactivate organization units at each valid level', function (): void {
+test('super admin can create, edit, move, and delete organization units at each valid level', function (): void {
     $super = adminActor();
     $root = adminSession($super)->postJson('/api/unit-organisasi', [
         'parent_id' => null,
@@ -68,6 +67,7 @@ test('super admin can create, edit, move, and deactivate organization units at e
         'jenis' => 'BIDANG',
     ])->assertCreated()->json('data');
     $this->deleteJson('/api/unit-organisasi/'.$leaf['id'])->assertOk();
+    $this->assertDatabaseMissing('UNIT_ORGANISASI', ['id' => $leaf['id']]);
     $emptyRoot = $this->postJson('/api/unit-organisasi', [
         'parent_id' => null,
         'kode' => 'SATKER-EMPTY',
@@ -75,7 +75,7 @@ test('super admin can create, edit, move, and deactivate organization units at e
         'jenis' => 'SATKER',
     ])->assertCreated()->json('data');
     $this->deleteJson('/api/unit-organisasi/'.$emptyRoot['id'])->assertOk();
-    expect((bool) UnitOrganisasi::whereKey($emptyRoot['id'])->value('aktif'))->toBeFalse();
+    $this->assertDatabaseMissing('UNIT_ORGANISASI', ['id' => $emptyRoot['id']]);
 });
 test('administration requires authentication', function (string $resource): void {
     $this->getJson('/api/'.$resource)->assertUnauthorized();
@@ -154,14 +154,20 @@ test('deleting a user is blocked when audit history references the account', fun
         ->assertConflict()->assertJsonPath('code', 'pengguna_masih_digunakan');
     $this->assertDatabaseHas('USERS', ['id' => $target->id]);
 });
-test('deleting an employee is blocked when placement history references the employee', function (): void {
+test('deleting an employee removes placement history but requires deleting a linked account first', function (): void {
     $admin = adminActor();
     $employee = Pegawai::factory()->create();
-    PenempatanPegawai::factory()->create(['pegawai_id' => $employee->id]);
+    $placement = PenempatanPegawai::factory()->create(['pegawai_id' => $employee->id]);
 
-    $this->actingAs($admin)->deleteJson('/api/pegawai/'.$employee->id)
-        ->assertConflict()->assertJsonPath('code', 'pegawai_masih_digunakan');
-    $this->assertDatabaseHas('PEGAWAI', ['id' => $employee->id]);
+    $this->actingAs($admin)->deleteJson('/api/pegawai/'.$employee->id)->assertOk();
+    $this->assertDatabaseMissing('PEGAWAI', ['id' => $employee->id]);
+    $this->assertDatabaseMissing('PENEMPATAN_PEGAWAI', ['id' => $placement->id]);
+
+    $linkedEmployee = Pegawai::factory()->create();
+    User::factory()->create(['pegawai_id' => $linkedEmployee->id]);
+    $this->deleteJson('/api/pegawai/'.$linkedEmployee->id)
+        ->assertConflict()->assertJsonPath('code', 'pegawai_memiliki_akun');
+    $this->assertDatabaseHas('PEGAWAI', ['id' => $linkedEmployee->id]);
 });
 test('scope unit nullability follows R1', function (string $roleCode, bool $withUnit): void {
     $admin = adminActor();
@@ -210,17 +216,77 @@ test('unit creation tree and valid parent movement work', function (): void {
     $this->postJson('/api/unit-organisasi/'.$id.'/pindah-induk', ['parent_id' => $other->id])->assertOk()->assertJsonPath('data.parent_id', $other->id);
     $this->getJson('/api/unit-organisasi/pohon')->assertOk()->assertJsonCount(2, 'data');
 });
-test('a unit with children or active employees cannot be deactivated', function (bool $hasChild): void {
+test('a unit with children cannot be deleted', function (): void {
     $admin = adminActor();
     $unit = UnitOrganisasi::factory()->create();
-    if ($hasChild) {
-        UnitOrganisasi::factory()->create(['parent_id' => $unit->id, 'jenis' => 'BIDANG', 'aktif' => false]);
-    } else {
-        PenempatanPegawai::factory()->create(['unit_id' => $unit->id]);
-    }
+    UnitOrganisasi::factory()->create(['parent_id' => $unit->id, 'jenis' => 'BIDANG', 'aktif' => false]);
     $this->actingAs($admin)->deleteJson('/api/unit-organisasi/'.$unit->id)->assertConflict()->assertJsonPath('code', 'unit_masih_digunakan');
-    expect($unit->refresh()->aktif)->toBeTrue();
-})->with([true, false]);
+    $this->assertModelExists($unit);
+});
+
+test('Admin Satker can delete scoped employees and leaf units with their direct relations', function (): void {
+    $super = adminActor();
+    $root = UnitOrganisasi::factory()->create(['jenis' => 'SATKER', 'parent_id' => null]);
+    $unit = UnitOrganisasi::factory()->create(['parent_id' => $root->id, 'jenis' => 'BIDANG']);
+    $satkerAdmin = User::factory()->create();
+    grantRole($satkerAdmin, 'ADMIN_SATKER', $root->id);
+
+    $employee = Pegawai::factory()->create();
+    $employeePlacement = PenempatanPegawai::factory()->create(['pegawai_id' => $employee->id, 'unit_id' => $unit->id]);
+    adminSession($satkerAdmin)->deleteJson('/api/pegawai/'.$employee->id)->assertOk();
+    $this->assertDatabaseMissing('PEGAWAI', ['id' => $employee->id]);
+    $this->assertDatabaseMissing('PENEMPATAN_PEGAWAI', ['id' => $employeePlacement->id]);
+
+    $accountEmployee = Pegawai::factory()->create();
+    PenempatanPegawai::factory()->create(['pegawai_id' => $accountEmployee->id, 'unit_id' => $unit->id]);
+    $account = User::factory()->create(['pegawai_id' => $accountEmployee->id]);
+    $accountScope = grantRole($account, 'STAFF', $unit->id);
+    $this->deleteJson('/api/users/'.$account->id)->assertOk();
+    $this->assertDatabaseMissing('USERS', ['id' => $account->id]);
+    $this->assertDatabaseMissing('USER_ROLE_SCOPE', ['id' => $accountScope->id]);
+    $this->assertDatabaseHas('PEGAWAI', ['id' => $accountEmployee->id]);
+
+    $unitEmployee = Pegawai::factory()->create();
+    $unitPlacement = PenempatanPegawai::factory()->create(['pegawai_id' => $unitEmployee->id, 'unit_id' => $unit->id]);
+    $unitUser = User::factory()->create(['pegawai_id' => $unitEmployee->id]);
+    $unitScope = grantRole($unitUser, 'STAFF', $unit->id);
+    $this->deleteJson('/api/unit-organisasi/'.$unit->id)->assertOk();
+    $this->assertDatabaseMissing('UNIT_ORGANISASI', ['id' => $unit->id]);
+    $this->assertDatabaseMissing('PENEMPATAN_PEGAWAI', ['id' => $unitPlacement->id]);
+    $this->assertDatabaseMissing('USER_ROLE_SCOPE', ['id' => $unitScope->id]);
+    $this->assertDatabaseHas('USERS', ['id' => $unitUser->id]);
+    $this->assertDatabaseHas('UNIT_ORGANISASI', ['id' => $root->id]);
+    expect($super->refresh()->aktif)->toBeTrue();
+});
+
+test('Admin Satker cannot delete an employee with placement history outside its scope', function (): void {
+    $root = UnitOrganisasi::factory()->create(['jenis' => 'SATKER', 'parent_id' => null]);
+    $unit = UnitOrganisasi::factory()->create(['parent_id' => $root->id, 'jenis' => 'BIDANG']);
+    $outsideRoot = UnitOrganisasi::factory()->create(['jenis' => 'SATKER', 'parent_id' => null]);
+    $outsideUnit = UnitOrganisasi::factory()->create(['parent_id' => $outsideRoot->id, 'jenis' => 'BIDANG']);
+    $satkerAdmin = User::factory()->create();
+    grantRole($satkerAdmin, 'ADMIN_SATKER', $root->id);
+    $employee = Pegawai::factory()->create();
+    $outsidePlacement = PenempatanPegawai::factory()->create([
+        'pegawai_id' => $employee->id,
+        'unit_id' => $outsideUnit->id,
+        'mulai' => '2020-01-01',
+        'selesai' => '2020-12-31',
+    ]);
+    $inScopePlacement = PenempatanPegawai::factory()->create([
+        'pegawai_id' => $employee->id,
+        'unit_id' => $unit->id,
+        'mulai' => today()->toDateString(),
+        'selesai' => null,
+    ]);
+
+    adminSession($satkerAdmin)->deleteJson('/api/pegawai/'.$employee->id)
+        ->assertConflict()->assertJsonPath('code', 'pegawai_di_luar_scope');
+    $this->assertDatabaseHas('PEGAWAI', ['id' => $employee->id]);
+    $this->assertDatabaseHas('PENEMPATAN_PEGAWAI', ['id' => $outsidePlacement->id]);
+    $this->assertDatabaseHas('PENEMPATAN_PEGAWAI', ['id' => $inScopePlacement->id]);
+});
+
 test('new primary placement closes the old placement atomically', function (): void {
     $admin = adminActor();
     $pegawai = Pegawai::factory()->create();
@@ -381,11 +447,20 @@ test('audited writes fail atomically if audit persistence fails', function (): v
     expect($pegawai->refresh()->nama)->toBe('Original');
 });
 
-test('organization units cannot be physically deleted through models', function (): void {
-    $class = UnitOrganisasi::class;
-    $model = $class::factory()->create();
-    expect(fn () => $model->delete())->toThrow(BusinessRuleException::class);
-    $this->assertModelExists($model);
+test('organization units without any references can be physically deleted', function (): void {
+    $admin = adminActor();
+    $unit = UnitOrganisasi::factory()->create(['jenis' => 'SATKER', 'parent_id' => null]);
+    $this->actingAs($admin)->deleteJson('/api/unit-organisasi/'.$unit->id)->assertOk();
+    $this->assertModelMissing($unit);
+});
+
+test('organization units with children or placements cannot be deleted', function (): void {
+    $admin = adminActor();
+    $parent = UnitOrganisasi::factory()->create(['jenis' => 'SATKER', 'parent_id' => null]);
+    UnitOrganisasi::factory()->create(['parent_id' => $parent->id, 'jenis' => 'BIDANG']);
+    $this->actingAs($admin)->deleteJson('/api/unit-organisasi/'.$parent->id)
+        ->assertConflict()->assertJsonPath('code', 'unit_masih_digunakan');
+    $this->assertModelExists($parent);
 });
 
 test('OpenAPI includes implemented routes and is restricted outside local', function (): void {

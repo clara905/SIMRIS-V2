@@ -8,6 +8,13 @@ use Illuminate\Support\Facades\DB;
 
 class HierarkiService
 {
+    public function validateUnitDelete(UnitOrganisasi $unit): void
+    {
+        if (UnitOrganisasi::where('parent_id', $unit->id)->exists()) {
+            throw new BusinessRuleException('unit_masih_digunakan', 'Unit masih memiliki unit anak dan tidak dapat dihapus. Hapus atau pindahkan unit anak terlebih dahulu.');
+        }
+    }
+
     public function validateUnit(array $data, ?UnitOrganisasi $unit = null): void
     {
         $values = [...($unit?->getAttributes() ?? []), ...$data];

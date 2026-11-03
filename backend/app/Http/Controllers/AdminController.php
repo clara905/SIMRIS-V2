@@ -97,7 +97,7 @@ class AdminController extends Controller
     {
         $this->service->mutate($request->route('resource'), (int) $request->route('id'), [], 'delete', $request->user());
 
-        return response()->json(['message' => 'Data berhasil dihapus atau dinonaktifkan.']);
+        return response()->json(['message' => 'Data berhasil dihapus.']);
     }
 
     /**

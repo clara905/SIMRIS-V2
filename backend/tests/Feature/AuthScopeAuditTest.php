@@ -109,6 +109,35 @@ test('audit recursively removes sensitive fields and cannot be mutated through i
     expect(fn () => $log->delete())->toThrow(LogicException::class);
     expect(fn () => $log->forceFill(['aksi' => 'OTHER'])->save())->toThrow(LogicException::class);
 });
+test('only a super admin can delete an audit entry', function (): void {
+    $superAdmin = User::factory()->create();
+    grantRole($superAdmin, 'SUPER_ADMIN');
+    $auditId = DB::table('LOG_AUDIT')->insertGetId([
+        'user_id' => $superAdmin->id,
+        'entitas' => 'TEST',
+        'entitas_id' => 1,
+        'aksi' => 'UPDATE',
+        'ip_address' => '127.0.0.1',
+        'waktu' => now(),
+    ]);
+
+    $this->actingAs($superAdmin)->deleteJson("/api/log-audit/$auditId")->assertNoContent();
+    $this->assertDatabaseMissing('LOG_AUDIT', ['id' => $auditId]);
+
+    $staff = User::factory()->create();
+    grantRole($staff, 'STAFF', UnitOrganisasi::factory()->create()->id);
+    $anotherAuditId = DB::table('LOG_AUDIT')->insertGetId([
+        'user_id' => $staff->id,
+        'entitas' => 'TEST',
+        'entitas_id' => 2,
+        'aksi' => 'UPDATE',
+        'ip_address' => '127.0.0.1',
+        'waktu' => now(),
+    ]);
+
+    $this->actingAs($staff)->deleteJson("/api/log-audit/$anotherAuditId")->assertForbidden();
+    $this->assertDatabaseHas('LOG_AUDIT', ['id' => $anotherAuditId]);
+});
 test('csrf protection rejects login without a valid token outside testing bypass', function (): void {
     $this->app->instance('env', 'local');
     $this->postJson('/login', ['login' => 'someone', 'password' => 'secret'])->assertStatus(419);

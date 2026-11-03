@@ -123,10 +123,6 @@ class AdminService
                 if (in_array($action, ['aktifkan', 'nonaktifkan'], true)) {
                     $data = ['aktif' => $action === 'aktifkan'];
                 }
-                if ($action === 'delete' && $resource === 'unit-organisasi') {
-                    $data = ['aktif' => false];
-                    $action = 'update';
-                }
                 if ($resource === 'users') {
                     if (! $this->scope->isSuper($actor)) {
                         $this->assertSatkerUserTarget($model, $data, $actor);
@@ -149,11 +145,15 @@ class AdminService
                 if ($resource === 'user-role-scope') {
                     $data = $this->validateScope($model, $data, $action, $actor);
                 }
-                if ($resource === 'unit-organisasi' && $action !== 'delete') {
+                if ($resource === 'unit-organisasi') {
                     if (! $this->scope->isSuper($actor)) {
                         $this->assertSatkerUnit($model, $data, $action, $actor);
                     }
-                    $this->hierarki->validateUnit($data, $id ? $model : null);
+                    if ($action === 'delete') {
+                        $this->hierarki->validateUnitDelete($model);
+                    } else {
+                        $this->hierarki->validateUnit($data, $id ? $model : null);
+                    }
                 }
                 if ($resource === 'pegawai' && ! $this->scope->isSuper($actor) && $id && ! $this->pegawaiInSatkerScope((int) $model->id, $actor)) {
                     throw new BusinessRuleException('pegawai_di_luar_scope', 'Pegawai harus memiliki penempatan aktif di wilayah Admin Satker.');
@@ -191,7 +191,14 @@ class AdminService
                 try {
                     if ($action === 'delete') {
                         if ($resource === 'users') {
-                            $this->deleteUserRoleScopes($model, $this->scope->isSuper($actor));
+                            $this->deleteUserRoleScopes($model, $actor);
+                        } elseif ($resource === 'pegawai') {
+                            if (User::where('pegawai_id', $model->id)->exists()) {
+                                throw new BusinessRuleException('pegawai_memiliki_akun', 'Hapus akun pengguna yang terhubung terlebih dahulu sebelum menghapus pegawai.');
+                            }
+                            $this->deleteEmployeePlacements($model, $actor);
+                        } elseif ($resource === 'unit-organisasi') {
+                            $this->deleteUnitRelations($model, $this->scope->isSuper($actor));
                         }
                         $model->delete();
                     } elseif ($resource === 'penempatan-pegawai') {
@@ -242,15 +249,54 @@ class AdminService
                 if ($action === 'delete' && $resource === 'users') {
                     throw new BusinessRuleException('pengguna_masih_digunakan', 'Akun masih dirujuk oleh audit atau riwayat operasional. Data terkait dipertahankan; hapus tidak dapat dilanjutkan.');
                 }
+                if ($action === 'delete' && $resource === 'unit-organisasi') {
+                    throw new BusinessRuleException('unit_masih_digunakan', 'Unit masih dirujuk oleh data operasional lain (aset, dokumen, role, atau asesmen). Pindahkan atau hapus data terkait terlebih dahulu.');
+                }
                 throw new BusinessRuleException('integritas_data', 'Data masih dirujuk atau melanggar kunci unik. Periksa kembali data terkait.');
             }
             throw $exception;
         }
     }
 
-    private function deleteUserRoleScopes(Model $user, bool $superAdmin): void
+    private function deleteUserRoleScopes(Model $user, User $actor): void
     {
-        $scopes = UserRoleScope::where('user_id', $user->id)->lockForUpdate()->get();
+        $query = UserRoleScope::where('user_id', $user->id);
+        $superAdmin = $this->scope->isSuper($actor);
+        if (! $superAdmin) {
+            $unitIds = $this->scope->idsForRoles($actor, ['ADMIN_SATKER']);
+            if ((clone $query)->where(fn ($scope) => $scope->whereNull('unit_id')->orWhereNotIn('unit_id', $unitIds))->exists()) {
+                throw new BusinessRuleException('user_di_luar_scope', 'Akun memiliki role di luar wilayah Admin Satker dan tidak dapat dihapus.');
+            }
+        }
+        $this->deleteRoleScopes($query, $superAdmin);
+    }
+
+    private function deleteEmployeePlacements(Model $pegawai, User $actor): void
+    {
+        $placements = PenempatanPegawai::where('pegawai_id', $pegawai->id)->lockForUpdate()->get();
+        if (! $this->scope->isSuper($actor)) {
+            $satkerUnits = $this->scope->idsForRoles($actor, ['ADMIN_SATKER']);
+            if ($placements->contains(fn (PenempatanPegawai $placement): bool => ! in_array((int) $placement->unit_id, $satkerUnits, true))) {
+                throw new BusinessRuleException('pegawai_di_luar_scope', 'Riwayat penempatan pegawai berada di luar wilayah Admin Satker dan tidak dapat dihapus.');
+            }
+        }
+        foreach ($placements as $placement) {
+            $placement->delete();
+        }
+    }
+
+    private function deleteUnitRelations(Model $unit, bool $superAdmin): void
+    {
+        $placements = PenempatanPegawai::where('unit_id', $unit->id)->lockForUpdate()->get();
+        foreach ($placements as $placement) {
+            $placement->delete();
+        }
+        $this->deleteRoleScopes(UserRoleScope::where('unit_id', $unit->id), $superAdmin);
+    }
+
+    private function deleteRoleScopes(Builder $query, bool $superAdmin): void
+    {
+        $scopes = $query->lockForUpdate()->get();
         foreach ($scopes as $scope) {
             $roleCode = Role::find($scope->role_id)?->kode;
             $before = $scope->getAttributes();

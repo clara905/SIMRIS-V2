@@ -17,7 +17,7 @@ class MeResource extends JsonResource
         if ($pegawai) {
             $hasNip = $pegawai->nip !== null && $pegawai->nip !== '';
             $pegawai->setAttribute('nip_tersedia', $hasNip);
-            $pegawai->setAttribute('nip', $hasNip ? str_repeat('*', 18) : null);
+            $pegawai->setAttribute('nip', $hasNip ? str_repeat('•', 18) : null);
         }
 
         return [

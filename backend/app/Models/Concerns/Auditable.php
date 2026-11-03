@@ -7,20 +7,23 @@ use Illuminate\Support\Facades\DB;
 
 trait Auditable
 {
+    /** Setel ke true untuk menonaktifkan audit otomatis sementara pada model ini. */
+    public bool $suppressAutomaticAudit = false;
+
     public static function bootAuditable(): void
     {
         static::created(function ($model): void {
-            if (! property_exists($model, 'suppressAutomaticAudit') || ! $model->suppressAutomaticAudit) {
+            if (! $model->suppressAutomaticAudit) {
                 app(AuditService::class)->record($model->getTable(), (int) $model->getKey(), 'CREATE', null, $model->getAttributes());
             }
         });
         static::updated(function ($model): void {
-            if (! property_exists($model, 'suppressAutomaticAudit') || ! $model->suppressAutomaticAudit) {
+            if (! $model->suppressAutomaticAudit) {
                 app(AuditService::class)->record($model->getTable(), (int) $model->getKey(), 'UPDATE', $model->getRawOriginal(), $model->getAttributes());
             }
         });
         static::deleted(function ($model): void {
-            if (! property_exists($model, 'suppressAutomaticAudit') || ! $model->suppressAutomaticAudit) {
+            if (! $model->suppressAutomaticAudit) {
                 app(AuditService::class)->record($model->getTable(), (int) $model->getKey(), 'DELETE', $model->getAttributes());
             }
         });

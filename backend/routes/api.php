@@ -76,6 +76,7 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function (): void {
         Route::post('/users/{id}/'.$action, [$controller, 'update'])->whereNumber('id')->defaults('resource', 'users')->defaults('action', $action)->middleware($action === 'reset-password' ? ['password.confirmed'] : []);
     }
     Route::post('/unit-organisasi/{id}/pindah-induk', [$controller, 'update'])->whereNumber('id')->defaults('resource', 'unit-organisasi')->defaults('action', 'pindah-induk');
+    Route::post('/pegawai/{id}/lihat-nip', [$controller, 'revealNip'])->whereNumber('id')->defaults('resource', 'pegawai')->defaults('action', 'lihat-nip');
 });
 
 Route::middleware(['auth:sanctum', 'account.active'])->group(function (): void {
@@ -224,5 +225,6 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function (): void {
     }
     Route::get('/log-audit/ekspor', [$controller, 'export'])->defaults('resource', 'log-audit');
     Route::get('/log-audit', [$controller, 'index'])->defaults('resource', 'log-audit');
+    Route::delete('/log-audit/{id}', [$controller, 'destroy'])->whereNumber('id')->defaults('resource', 'log-audit');
     Route::get('/laporan/lampiran-14', [$controller, 'report'])->defaults('resource', 'lampiran-14');
 });

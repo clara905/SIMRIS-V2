@@ -18,6 +18,8 @@ use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class MonitoringController extends Controller
@@ -100,5 +102,18 @@ class MonitoringController extends Controller
                 } fputcsv($stream, $values, ',', '"', '');
             } fclose($stream);
         }, 'log-audit.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    public function destroy(MonitoringRequest $request): \Illuminate\Http\Response
+    {
+        Gate::authorize('audit.delete');
+        $id = (int) $request->route('id');
+
+        DB::transaction(function () use ($id): void {
+            LogAudit::query()->whereKey($id)->lockForUpdate()->firstOrFail();
+            DB::table('LOG_AUDIT')->where('id', $id)->delete();
+        });
+
+        return response()->noContent();
     }
 }

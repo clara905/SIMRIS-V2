@@ -4,14 +4,12 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use App\Models\Concerns\Auditable;
 use App\Models\Concerns\SerializesLocalDates;
 use Illuminate\Database\Eloquent\Model;
 use LogicException;
 
 class LogAudit extends Model
 {
-    use Auditable;
     use SerializesLocalDates;
 
     protected $table = 'LOG_AUDIT';
@@ -34,12 +32,6 @@ class LogAudit extends Model
         static::saving(
             fn () => throw new LogicException(
                 'Gunakan AuditService untuk menambah atau mengubah audit.'
-            )
-        );
-
-        static::deleting(
-            fn () => throw new LogicException(
-                'Log audit tidak dapat dihapus.'
             )
         );
     }
