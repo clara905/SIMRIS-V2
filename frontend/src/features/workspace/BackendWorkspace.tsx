@@ -15,6 +15,7 @@ import {
   Menu,
   X,
   Download,
+  Trash2,
   LockKeyhole,
   Activity,
   CircleCheck,
@@ -930,12 +931,16 @@ function Overview() {
 }
 function Registry({ resources }: { resources: Resource[] }) {
   const [params, setParams] = useSearchParams()
+  const client = useQueryClient()
+  const session = useSession()
   const resource = resources.find((r) => r.key === params.get('tab')) || resources[0]
   const page = Math.max(1, Number(params.get('page')) || 1)
   const status = params.get('status') || ''
   const id = params.get('id') || ''
   const [idDraft, setIdDraft] = useState(id)
   const [selected, setSelected] = useState<Row | null>(null)
+  const [auditToDelete, setAuditToDelete] = useState<Row | null>(null)
+  const [deletingAudit, setDeletingAudit] = useState(false)
   const filter = {
     ...(resource.defaultFilter || {}),
     ...(id ? { id } : {}),
@@ -1057,7 +1062,7 @@ function Registry({ resources }: { resources: Resource[] }) {
                       {resource.columns.map((c) => (
                         <th key={c}>{label(c)}</th>
                       ))}
-                      <th>Rincian</th>
+                      <th>{resource.key === 'log-audit' ? 'Tindakan' : 'Rincian'}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1085,13 +1090,25 @@ function Registry({ resources }: { resources: Resource[] }) {
                           )
                         })}
                         <td>
-                          <button
-                            aria-label={'Lihat rincian ' + row.id}
-                            className="ws-row-open"
-                            onClick={() => setSelected(row)}
-                          >
-                            <ArrowUpRight size={17} />
-                          </button>
+                          {resource.key === 'log-audit' ? (
+                            session.data?.roleCodes?.includes('SUPER_ADMIN') ? (
+                            <button
+                              aria-label={'Hapus jejak audit ' + row.id}
+                              className="ws-row-open"
+                              onClick={() => setAuditToDelete(row)}
+                            >
+                              <Trash2 size={17} />
+                            </button>
+                            ) : <span aria-label="Jejak audit hanya dapat dihapus super admin">—</span>
+                          ) : (
+                            <button
+                              aria-label={'Lihat rincian ' + row.id}
+                              className="ws-row-open"
+                              onClick={() => setSelected(row)}
+                            >
+                              <ArrowUpRight size={17} />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -1141,6 +1158,31 @@ function Registry({ resources }: { resources: Resource[] }) {
           <RecordDetail key={resource.key + selected.id} row={selected} resource={resource} />
         )}
       </Drawer>
+      <ConfirmDialog
+        open={!!auditToDelete}
+        onClose={() => setAuditToDelete(null)}
+        title="Hapus jejak audit?"
+        description={[
+          `Entri audit #${auditToDelete?.id ?? ''} akan dihapus permanen.`,
+          'Riwayat lain tidak berubah.',
+        ]}
+        confirmLabel={deletingAudit ? 'Menghapus…' : 'Hapus jejak audit'}
+        pending={deletingAudit}
+        onConfirm={async () => {
+          if (!auditToDelete || deletingAudit) return
+          setDeletingAudit(true)
+          try {
+            await api.delete(`/api/log-audit/${auditToDelete.id}`)
+            setAuditToDelete(null)
+            await client.invalidateQueries({ queryKey: ['workspace', 'list'] })
+            toast.success('Jejak audit dihapus')
+          } catch (error) {
+            toast.error(errorMessage(error))
+          } finally {
+            setDeletingAudit(false)
+          }
+        }}
+      />
     </>
   )
 }

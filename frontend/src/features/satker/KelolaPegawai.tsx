@@ -657,7 +657,7 @@ export function KelolaPegawai({ superAdmin = false }: { superAdmin?: boolean }) 
         title="Hapus pegawai permanen?"
         description={[
           `Pegawai ${stringOf(deleting?.nama)} akan dihapus permanen.`,
-          'Penghapusan ditolak jika pegawai masih memiliki penempatan atau dirujuk data operasional.',
+          'Riwayat penempatan pegawai ikut dihapus. Hapus akun yang terhubung terlebih dahulu; data operasional dan audit tetap dilindungi.',
         ]}
         confirmLabel="Hapus pegawai"
         pending={removePegawai.isPending}

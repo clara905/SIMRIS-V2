@@ -140,12 +140,12 @@ export function KelolaUnit({ superAdmin = false }: { superAdmin?: boolean }) {
     },
   })
 
-  const deactivate = useMutation({
+  const deleteUnit = useMutation({
     mutationFn: async () => {
       if (removing) await api.delete('/api/unit-organisasi/' + removing.id)
     },
     onSuccess: () => {
-      toast.success('Unit dinonaktifkan.')
+      toast.success('Unit berhasil dihapus.')
       setRemoving(null)
       refresh()
     },
@@ -370,11 +370,11 @@ export function KelolaUnit({ superAdmin = false }: { superAdmin?: boolean }) {
                               <Shuffle size={16} />
                             </button>
                           )}
-                            {(superAdmin || !isRootSatker) && unit.aktif && (
+                            {(superAdmin || !isRootSatker) && (
                               <button
                                 className="ws-row-open"
-                                aria-label={'Nonaktifkan unit ' + unit.nama}
-                                title={'Nonaktifkan unit ' + unit.nama}
+                                aria-label={'Hapus unit ' + unit.nama}
+                                title={'Hapus unit ' + unit.nama}
                                 onClick={() => setRemoving(unit)}
                               >
                                 <Trash2 size={16} />
@@ -527,14 +527,14 @@ export function KelolaUnit({ superAdmin = false }: { superAdmin?: boolean }) {
       <ConfirmDialog
         open={!!removing}
         onClose={() => setRemoving(null)}
-        title="Nonaktifkan unit?"
+        title="Hapus unit permanen?"
         description={[
-          `Unit ${removing?.nama ?? ''} tidak akan aktif lagi.`,
-          'Backend akan menolak jika unit masih memiliki anak atau pegawai aktif.',
+          `Unit ${removing?.nama ?? ''} akan dihapus secara permanen dari sistem.`,
+          'Penempatan pegawai dan role pada unit ini ikut dihapus. Penghapusan ditolak jika masih memiliki unit anak atau data operasional yang terhubung.',
         ]}
-        confirmLabel="Nonaktifkan"
-        pending={deactivate.isPending}
-        onConfirm={() => deactivate.mutateAsync()}
+        confirmLabel="Hapus"
+        pending={deleteUnit.isPending}
+        onConfirm={() => deleteUnit.mutateAsync()}
       />
     </>
   )
