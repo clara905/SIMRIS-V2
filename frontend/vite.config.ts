@@ -10,10 +10,12 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://localhost:8000',
-      '/sanctum': 'http://localhost:8000',
-      '/login': 'http://localhost:8000',
-      '/logout': 'http://localhost:8000',
+      '/api': 'http://127.0.0.1:8000',
+      '/sanctum': 'http://127.0.0.1:8000',
+      '/login': 'http://127.0.0.1:8000',
+      '/logout': 'http://127.0.0.1:8000',
+      '/daftar': 'http://127.0.0.1:8000',
+      '/ganti-password': 'http://127.0.0.1:8000',
     },
   },
   test: {

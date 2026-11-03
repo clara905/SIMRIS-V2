@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use App\Models\Concerns\Auditable;
@@ -17,11 +19,8 @@ class Role extends Model
 
     protected $table = 'ROLES';
 
-    protected $fillable = ['kode', 'nama'];
-
-    /** @return array<string, string> */
-    protected function casts(): array
-    {
-        return [];
-    }
+    protected $fillable = [
+        'kode',
+        'nama',
+    ];
 }

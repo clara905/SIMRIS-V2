@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use App\Exceptions\BusinessRuleException;
@@ -18,16 +20,28 @@ class UnitOrganisasi extends Model
 
     protected $table = 'UNIT_ORGANISASI';
 
-    protected $fillable = ['parent_id', 'kode', 'nama', 'jenis', 'aktif'];
+    protected $fillable = [
+        'parent_id',
+        'kode',
+        'nama',
+        'jenis',
+        'aktif',
+    ];
 
-    /** @return array<string, string> */
     protected function casts(): array
     {
-        return ['aktif' => 'boolean'];
+        return [
+            'aktif' => 'boolean',
+        ];
     }
 
     protected static function booted(): void
     {
-        static::deleting(fn () => throw new BusinessRuleException('hapus_fisik_dilarang', 'Gunakan penonaktifan untuk menjaga riwayat data.'));
+        static::deleting(
+            fn () => throw new BusinessRuleException(
+                'hapus_fisik_dilarang',
+                'Gunakan penonaktifan untuk menjaga riwayat data.'
+            )
+        );
     }
 }

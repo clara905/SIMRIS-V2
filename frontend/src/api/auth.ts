@@ -19,7 +19,27 @@ export interface BackendSession {
   pegawai: { id: number; nip?: string | null; nip_tersedia?: boolean; nama: string; email_kontak: string; jenis_kepegawaian?: string | null } | null
   roles: { kode: string; nama: string; unit_id: number | null }[]
 }
-export function normalizeSession(data: SessionUser | BackendSession): SessionUser {
+export interface LaravelSession {
+  id: number
+  username: string
+  email: string
+  nama: string
+  aktif: boolean
+  peran: { kode: string; nama: string; unit: { id: number } | null }[]
+}
+export function normalizeSession(data: SessionUser | BackendSession | LaravelSession): SessionUser {
+  if ('peran' in data) {
+    return {
+      id: data.id,
+      username: data.username,
+      nama: data.nama,
+      email: data.email,
+      wajib_ganti_password: false,
+      role: data.peran.map((role) => role.nama).join(', ') || 'Tanpa role aktif',
+      roleCodes: data.peran.map((role) => role.kode),
+      unitIds: [...new Set(data.peran.flatMap((role) => (role.unit ? [role.unit.id] : [])))],
+    }
+  }
   if (!('user' in data)) return data
   return {
     id: data.user.id,
@@ -39,21 +59,24 @@ export const sessionKey = ['session']
 export function useSession() {
   return useQuery({
     queryKey: sessionKey,
-    queryFn: async () =>
-      normalizeSession(
-        (await api.get<{ data: SessionUser | BackendSession }>('/api/me')).data.data,
-      ),
+    queryFn: async () => {
+      const response = (await api.get<
+        { data: SessionUser | BackendSession | LaravelSession } | LaravelSession
+      >('/api/me')).data
+      return normalizeSession('data' in response ? response.data : response)
+    },
     retry: false,
     staleTime: 60_000,
   })
 }
-export async function login(values: { login: string; password: string; totp?: string }) {
+export async function loginWithFirebase(values: { email: string; password: string; captcha_token: string }) {
   await api.get('/sanctum/csrf-cookie')
-  await api.post('/login', {
-    login: values.login,
-    password: values.password,
-    ...(values.totp ? { totp: values.totp } : {}),
-  })
+  return (await api.post('/api/v1/login', values)).data
+}
+
+export async function loginWithPassword(values: { login: string; password: string; totp?: string }) {
+  await api.get('/sanctum/csrf-cookie')
+  return (await api.post('/login', values)).data
 }
 
 export async function register(values: {
@@ -62,8 +85,8 @@ export async function register(values: {
   password: string
   password_confirmation: string
 }) {
-  await api.get('/sanctum/csrf-cookie')
-  return (await api.post<{ data: SessionUser | BackendSession }>('/daftar', values)).data
+  const { data } = await api.post<{ data: SessionUser | BackendSession }>('/daftar', values)
+  return data
 }
 export async function updateProfile(values: {
   nama: string

@@ -7,15 +7,17 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { Eye, EyeOff, LockKeyhole, ShieldCheck, UserPlus } from 'lucide-react'
-import { login, register, sessionKey, normalizeSession } from '../../api/auth'
+import { useEffect, useRef } from 'react'
+import { loginWithFirebase, loginWithPassword, register, sessionKey, normalizeSession } from '../../api/auth'
 import { errorMessage, fieldErrors } from '../../api/client'
 import s from './Auth.module.css'
 
 /* ─── Login ─────────────────────────────────────────────────────────────── */
 
 const loginSchema = z.object({
-  login: z.string().min(1, 'Masukkan username atau email.'),
+  email: z.string().min(1, 'Masukkan username atau alamat email.'),
   password: z.string().min(1, 'Masukkan kata sandi.'),
+  captcha_token: z.string().optional(),
   totp: z.string().optional(),
 })
 
@@ -25,13 +27,92 @@ export function LoginPage() {
   const client = useQueryClient()
   const [error, setError] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-
+  const firebaseAuth = import.meta.env.VITE_FIREBASE_AUTH === 'true'
+  const [captchaReady, setCaptchaReady] = useState(false)
+  const [captchaSiteKey, setCaptchaSiteKey] = useState(import.meta.env.VITE_RECAPTCHA_SITE_KEY || '')
+  const [captchaConfigError, setCaptchaConfigError] = useState('')
+  const captchaElement = useRef<HTMLDivElement>(null)
+  const captchaWidgetId = useRef<number | null>(null)
+  const captchaToken = useRef('')
   const {
     register: reg,
     handleSubmit,
     setError: setFieldError,
+    setValue,
+    clearErrors,
     formState: { errors, isSubmitting },
   } = useForm<z.infer<typeof loginSchema>>({ resolver: zodResolver(loginSchema) })
+
+  useEffect(() => {
+    let dibatalkan = false
+    const muatSiteKey = async () => {
+      if (captchaSiteKey) return captchaSiteKey
+      try {
+        const { data } = await api.get<{ recaptcha_site_key?: string }>('/api/v1/config')
+        if (!dibatalkan && data.recaptcha_site_key) {
+          setCaptchaSiteKey(data.recaptcha_site_key)
+          setCaptchaConfigError('')
+        } else if (!dibatalkan) {
+          setCaptchaConfigError('Site key captcha kosong di konfigurasi backend.')
+        }
+        return data.recaptcha_site_key || ''
+      } catch {
+        if (!dibatalkan) setCaptchaConfigError('Tidak bisa memuat konfigurasi reCAPTCHA dari backend. Pastikan Laravel aktif dan endpoint /api/v1/config bisa diakses.')
+        return ''
+      }
+    }
+
+    void muatSiteKey()
+    return () => { dibatalkan = true }
+  }, [captchaSiteKey])
+
+  useEffect(() => {
+    const siteKey = captchaSiteKey
+    if (!siteKey || !captchaElement.current) return
+
+    const renderCaptcha = () => {
+      if (!window.grecaptcha || !captchaElement.current || captchaWidgetId.current !== null) return
+      captchaWidgetId.current = window.grecaptcha.render(captchaElement.current, {
+        sitekey: siteKey,
+        callback: (token) => {
+          captchaToken.current = token
+          setValue('captcha_token', token, { shouldValidate: true })
+          clearErrors('captcha_token')
+        },
+        'expired-callback': () => {
+          captchaToken.current = ''
+          setValue('captcha_token', '', { shouldValidate: true })
+        },
+        'error-callback': () => {
+          captchaToken.current = ''
+          setValue('captcha_token', '', { shouldValidate: true })
+        },
+      })
+      setCaptchaReady(true)
+    }
+
+    if (window.grecaptcha) {
+      window.grecaptcha.ready(renderCaptcha)
+      return
+    }
+
+    let script = document.querySelector<HTMLScriptElement>('script[data-simris-recaptcha]')
+    const handleLoad = () => window.grecaptcha?.ready(renderCaptcha)
+    if (script) {
+      script.addEventListener('load', handleLoad)
+      return () => script?.removeEventListener('load', handleLoad)
+    }
+
+    script = document.createElement('script')
+    script.src = 'https://www.google.com/recaptcha/api.js?render=explicit&hl=id'
+    script.async = true
+    script.defer = true
+    script.dataset.simrisRecaptcha = 'true'
+    script.addEventListener('load', handleLoad)
+    document.head.appendChild(script)
+
+    return () => script?.removeEventListener('load', handleLoad)
+  }, [captchaSiteKey, clearErrors, setValue])
 
   return (
     <div className={s.page}>
@@ -54,14 +135,31 @@ export function LoginPage() {
           onSubmit={handleSubmit(async (values) => {
             setError('')
             try {
-              await login(values)
+              if (firebaseAuth) {
+                await loginWithFirebase({
+                  email: values.email,
+                  password: values.password,
+                  captcha_token: captchaToken.current,
+                })
+              } else {
+                await loginWithPassword({
+                  login: values.email,
+                  password: values.password,
+                  totp: values.totp,
+                })
+              }
               await client.invalidateQueries({ queryKey: sessionKey })
               navigate(location.state?.from || '/', { replace: true })
             } catch (err) {
               setError(errorMessage(err))
+              if (firebaseAuth) {
+                captchaToken.current = ''
+                setValue('captcha_token', '', { shouldValidate: false })
+                if (captchaWidgetId.current !== null) window.grecaptcha?.reset(captchaWidgetId.current)
+              }
               for (const [key, messages] of Object.entries(fieldErrors(err))) {
-                if (['login', 'password'].includes(key)) {
-                  setFieldError(key as 'login' | 'password', { message: messages[0] })
+                if (['email', 'password', 'captcha_token'].includes(key)) {
+                  setFieldError(key as 'email' | 'password' | 'captcha_token', { message: messages[0] })
                 }
               }
             }
@@ -69,21 +167,21 @@ export function LoginPage() {
           noValidate
         >
           <h1>Masuk ke SIMRIS</h1>
-          <p>Gunakan username atau email dan kata sandi untuk membuka ruang kerja Anda.</p>
+          <p>Gunakan email dan kata sandi akun SIMRIS Anda.</p>
 
-          <label htmlFor="login">Username atau Email</label>
+          <label htmlFor="email">{firebaseAuth ? 'Email' : 'Username atau Email'}</label>
           <input
-            id="login"
-            type="text"
+            id="email"
+            type={firebaseAuth ? 'email' : 'text'}
             autoComplete="username"
-            placeholder="Masukkan username atau email"
-            {...reg('login')}
-            aria-invalid={!!errors.login}
-            aria-describedby="login-error"
+            placeholder={firebaseAuth ? 'nama@instansi.go.id' : 'Masukkan username atau email'}
+            {...reg('email')}
+            aria-invalid={!!errors.email}
+            aria-describedby="email-error"
             disabled={isSubmitting}
           />
-          <span id="login-error" className="field-error" aria-live="polite">
-            {errors.login?.message}
+          <span id="email-error" className="field-error" aria-live="polite">
+            {errors.email?.message}
           </span>
 
           <label htmlFor="password">Kata sandi</label>
@@ -111,6 +209,18 @@ export function LoginPage() {
           <span id="password-error" className="field-error" aria-live="polite">
             {errors.password?.message}
           </span>
+
+          {firebaseAuth && captchaSiteKey ? (
+            <div className={s.captchaContainer}>
+              <div ref={captchaElement} />
+              {!captchaReady && <span>Memuat verifikasi captcha…</span>}
+              <span className="field-error" aria-live="polite">{errors.captcha_token?.message}</span>
+            </div>
+          ) : firebaseAuth ? (
+            <p role="alert" className="field-error">
+              {captchaConfigError || 'reCAPTCHA belum dikonfigurasi. Isi VITE_RECAPTCHA_SITE_KEY di backend.'}
+            </p>
+          ) : null}
 
           {error && (
             <p role="alert" className="field-error">

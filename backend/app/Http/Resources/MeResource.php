@@ -2,15 +2,13 @@
 
 namespace App\Http\Resources;
 
-use App\Models\Pegawai;
-use App\Models\User;
-use App\Services\ScopeUnit;
-use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use App\Models\Pegawai;
+use App\Services\ScopeUnit;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
-/** @mixin User */
 class MeResource extends JsonResource
 {
     public function toArray(Request $request): array
@@ -19,7 +17,7 @@ class MeResource extends JsonResource
         if ($pegawai) {
             $hasNip = $pegawai->nip !== null && $pegawai->nip !== '';
             $pegawai->setAttribute('nip_tersedia', $hasNip);
-            $pegawai->setAttribute('nip', $hasNip ? str_repeat('•', 18) : null);
+            $pegawai->setAttribute('nip', $hasNip ? str_repeat('*', 18) : null);
         }
 
         return [

@@ -4,7 +4,8 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AsesmenController;
 use App\Http\Controllers\AsesmenWorkflowController;
 use App\Http\Controllers\AsetController;
-use App\Http\Controllers\AuthController;
+use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\AuthController as LegacyAuthController;
 use App\Http\Controllers\DokumenController;
 use App\Http\Controllers\ItemController;
 use App\Http\Controllers\KatalogController;
@@ -19,24 +20,47 @@ use App\Services\MetodeRisikoService;
 use App\Services\TautanKepatuhanService;
 use Illuminate\Support\Facades\Route;
 
+Route::prefix('v1')->group(function (): void {
+    Route::get('/config', fn () => response()->json([
+        'recaptcha_site_key' => config('simris.captcha.site_key'),
+    ]));
+
+    Route::post('/login', [AuthController::class, 'login'])
+        ->middleware('throttle:login');
+
+    Route::post('/lupa-kata-sandi', [AuthController::class, 'lupaKataSandi'])
+        ->middleware('throttle:lupa-kata-sandi');
+});
+
+Route::post('/login', [LegacyAuthController::class, 'login'])
+    ->middleware('throttle:6,1')
+    ->name('auth.login');
+
+Route::post('/lupa-kata-sandi', [AuthController::class, 'lupaKataSandi'])
+    ->middleware('throttle:lupa-kata-sandi')
+    ->name('auth.forgot-password');
+
+Route::middleware(['auth:sanctum', 'account.active'])->group(function (): void {
+    Route::get('/me', [LegacyAuthController::class, 'me'])->name('auth.me');
+    Route::put('/profil', [LegacyAuthController::class, 'updateProfile'])->name('auth.profile');
+    Route::post('/logout', [LegacyAuthController::class, 'logout'])->name('auth.logout');
+});
+
+Route::post('/daftar', [LegacyAuthController::class, 'register'])->middleware('auth:sanctum')->name('auth.register');
+Route::post('/konfirmasi-password', [LegacyAuthController::class, 'confirm'])
+    ->middleware(['auth:sanctum', 'account.active', 'throttle:6,1'])
+    ->name('auth.confirm');
+
 Route::get('/items', [ItemController::class, 'index']);
 
 Route::middleware(['auth:sanctum', 'account.active'])->group(function (): void {
-    Route::get('/me', [AuthController::class, 'me'])->name('auth.me');
-    Route::put('/profil', [AuthController::class, 'updateProfile'])->name('auth.profile');
-    Route::post('/ganti-password', [AuthController::class, 'password'])->name('auth.password');
+    Route::post('/ganti-password', [LegacyAuthController::class, 'password'])->name('auth.password');
 });
 
 Route::middleware(['auth:sanctum', 'account.active'])->group(function (): void {
     $controller = AdminController::class;
     Route::get('/unit-organisasi/pohon', [$controller, 'tree'])->defaults('resource', 'unit-organisasi');
-    Route::get('/unit-organisasi/jenis', [$controller, 'unitKinds']);
     Route::get('/pegawai/{id}/jalur', [$controller, 'path'])->whereNumber('id')->defaults('resource', 'pegawai');
-    Route::post('/pegawai/{id}/lihat-nip', [$controller, 'revealNip'])
-        ->whereNumber('id')
-        ->defaults('resource', 'pegawai')
-        ->defaults('action', 'lihat-nip')
-        ->middleware('throttle:6,1');
     foreach (AdminService::MODELS as $resource => $class) {
         Route::get('/'.$resource, [$controller, 'index'])->defaults('resource', $resource);
         Route::get('/'.$resource.'/{id}', [$controller, 'show'])->whereNumber('id')->defaults('resource', $resource);

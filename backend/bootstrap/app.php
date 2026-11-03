@@ -1,6 +1,9 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Http\Middleware\EnsureActiveAccount;
+use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\RequirePasswordConfirmation;
 use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Auth\AuthenticationException;
@@ -18,18 +21,50 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Autentikasi SPA React menggunakan cookie dan Sanctum.
         $middleware->statefulApi();
+
+        // Security headers untuk seluruh request.
         $middleware->append(SecurityHeaders::class);
-        $middleware->alias(['account.active' => EnsureActiveAccount::class, 'password.confirmed' => RequirePasswordConfirmation::class]);
+
+        // Alias middleware.
+        $middleware->alias([
+            'aktif' => EnsureUserIsActive::class,
+            'account.active' => EnsureActiveAccount::class,
+            'password.confirmed' => RequirePasswordConfirmation::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // API dan endpoint autentikasi selalu memberikan respons JSON.
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*', 'login', 'logout') || $request->expectsJson(),
+            fn (Request $request) =>
+                $request->is('api/*', 'login', 'logout', 'daftar')
+                || $request->expectsJson(),
         );
-        $exceptions->render(function (AuthenticationException $exception, Request $request) {
-            return response()->json(['message' => 'Silakan masuk terlebih dahulu.'], 401);
-        });
-        $exceptions->render(function (ValidationException $exception, Request $request) {
-            return response()->json(['message' => 'Data yang dikirim tidak valid.', 'errors' => $exception->errors()], 422);
-        });
-    })->create();
+
+        // Respons ketika pengguna belum terautentikasi.
+        $exceptions->render(
+            function (
+                AuthenticationException $exception,
+                Request $request
+            ) {
+                return response()->json([
+                    'message' => 'Silakan masuk terlebih dahulu.',
+                ], 401);
+            }
+        );
+
+        // Respons ketika validasi gagal.
+        $exceptions->render(
+            function (
+                ValidationException $exception,
+                Request $request
+            ) {
+                return response()->json([
+                    'message' => 'Data yang dikirim tidak valid.',
+                    'errors' => $exception->errors(),
+                ], 422);
+            }
+        );
+    })
+    ->create();
