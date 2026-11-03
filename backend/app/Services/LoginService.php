@@ -9,142 +9,78 @@ use App\Contracts\FirebaseAuthGateway;
 use App\Exceptions\LoginGagal;
 use App\Models\User;
 use App\Support\Firebase\FirebaseAuthException;
-use App\Support\Firebase\FirebaseIdentity;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
-/**
- * Urutan login: captcha → Firebase (kredensial) → pencocokan akun di database
- * → pengecekan aktif dan peran. Otorisasi (peran dan lingkup unit) selalu dari database,
- * tidak dari klaim token Firebase.
- */
 final class LoginService
 {
-    private const PESAN_UMUM = 'Email atau kata sandi salah.';
+    public function __construct(private readonly CaptchaVerifier $captcha, private readonly FirebaseAuthGateway $firebase, private readonly AuditService $audit) {}
 
-    private const PESAN_NONAKTIF = 'Akun Anda dinonaktifkan. Hubungi admin satker Anda.';
-
-    public function __construct(
-        private readonly CaptchaVerifier $captcha,
-        private readonly FirebaseAuthGateway $firebase,
-        private readonly AuditService $audit,
-    ) {}
-
-    /**
-     * @throws ValidationException captcha tidak sah
-     * @throws LoginGagal kredensial atau status akun tidak memenuhi syarat
-     */
-    public function masuk(string $email, string $kataSandi, string $tokenCaptcha, string $ip): User
+    public function masuk(string $identifier, string $password, string $captchaToken, string $ip): User
     {
-        $email = mb_strtolower(trim($email));
-
-        if (! $this->captcha->verify($tokenCaptcha, $ip)) {
-            throw ValidationException::withMessages([
-                'captcha_token' => 'Verifikasi captcha gagal. Muat ulang captcha lalu coba lagi.',
-            ]);
+        $this->checkCaptcha($captchaToken, $ip);
+        $identifier = mb_strtolower(trim($identifier));
+        $user = User::query()->with('pegawai')->where('email_login', $identifier)->orWhereHas('pegawai', fn($q) => $q->where('nip', $identifier))->first();
+        if (!$user) {
+            throw new LoginGagal('kredensial_salah', 401, 'NIP/email atau kata sandi salah.');
         }
-
         try {
-            $identitas = $this->firebase->signInWithPassword($email, $kataSandi);
+            $identity = $this->firebase->signInWithPassword($user->email_login, $password);
         } catch (FirebaseAuthException $e) {
-            $this->gagalDariFirebase($e, $email, $ip);
+            if ($e->alasan === FirebaseAuthException::KREDENSIAL_SALAH) throw new LoginGagal('kredensial_salah', 401, 'NIP/email atau kata sandi salah.');
+            Log::error('Firebase Auth gagal saat login', ['reason'=>$e->alasan, 'firebase_code'=>$e->kodeFirebase]);
+            throw new LoginGagal('firebase_unavailable', 503, 'Layanan autentikasi sedang bermasalah. Coba lagi nanti.');
         }
-
-        return $this->cocokkanAkun($identitas, $email, $ip);
-    }
-
-    /** Selalu diam-diam: tidak membocorkan apakah email terdaftar. */
-    public function lupaKataSandi(string $email, string $tokenCaptcha, string $ip): void
-    {
-        $email = mb_strtolower(trim($email));
-
-        if (! $this->captcha->verify($tokenCaptcha, $ip)) {
-            throw ValidationException::withMessages([
-                'captcha_token' => 'Verifikasi captcha gagal. Muat ulang captcha lalu coba lagi.',
-            ]);
+        if ((bool)config('simris.firebase.wajib_email_terverifikasi') && !$identity->emailVerified) throw new LoginGagal('email_unverified', 403, 'Email belum terverifikasi.');
+        if (!$user->aktif || ($user->pegawai !== null && !$user->pegawai->aktif)) {
+            throw new LoginGagal('akun_nonaktif', 403, 'Akun tidak aktif. Hubungi administrator.');
         }
-
-        $user = User::query()->where('email_login', $email)->first();
-        if ($user === null || ! $user->aktif) {
-            return;
-        }
-
-        try {
-            $this->firebase->sendPasswordReset($email);
-        } catch (FirebaseAuthException $e) {
-            Log::warning('Gagal meminta atur ulang kata sandi Firebase', ['alasan' => $e->alasan]);
-        }
-    }
-
-    private function gagalDariFirebase(FirebaseAuthException $e, string $email, string $ip): never
-    {
-        $userId = User::query()->where('email_login', $email)->value('id');
-
-        switch ($e->alasan) {
-            case FirebaseAuthException::AKUN_DINONAKTIFKAN:
-                $this->catatGagal($userId, $email, $ip, 'firebase_akun_dinonaktifkan');
-                throw new LoginGagal('firebase_akun_dinonaktifkan', 403, self::PESAN_NONAKTIF);
-            case FirebaseAuthException::TERLALU_BANYAK_PERCOBAAN:
-                $this->catatGagal($userId, $email, $ip, 'firebase_terlalu_banyak_percobaan');
-                throw new LoginGagal('firebase_terlalu_banyak_percobaan', 429, 'Terlalu banyak percobaan. Coba lagi beberapa menit lagi.');
-            case FirebaseAuthException::LAYANAN_GAGAL:
-                Log::error('Layanan Firebase Auth gagal saat login', [
-                    'email' => $email,
-                    'kode_firebase' => $e->kodeFirebase,
-                ]);
-                throw new LoginGagal('firebase_layanan_gagal', 503, 'Layanan autentikasi sedang bermasalah. Coba lagi nanti.');
-            default:
-                $this->catatGagal($userId, $email, $ip, 'kredensial_salah');
-                throw new LoginGagal('kredensial_salah', 401, self::PESAN_UMUM);
-        }
-    }
-
-    private function cocokkanAkun(FirebaseIdentity $identitas, string $email, string $ip): User
-    {
-        if ((bool) config('simris.firebase.wajib_email_terverifikasi') && ! $identitas->emailVerified) {
-            $this->catatGagal(User::query()->where('email_login', $email)->value('id'), $email, $ip, 'email_belum_terverifikasi');
-            throw new LoginGagal(
-                'email_belum_terverifikasi',
-                403,
-                'Email belum terverifikasi. Gunakan "Lupa kata sandi" untuk mengatur kata sandi Anda.'
-            );
-        }
-
-        // Kunci pencocokan: email dari Firebase (bukan dari input) ↔ users.email_login.
-        $user = User::query()
-            ->with('pegawai')
-            ->where('email_login', $identitas->email)
-            ->first();
-
-        if ($user === null) {
-            $this->catatGagal(null, $email, $ip, 'akun_tidak_terdaftar');
-            throw new LoginGagal('akun_tidak_terdaftar', 401, self::PESAN_UMUM);
-        }
-
-        if (! $user->aktif || ($user->pegawai !== null && ! $user->pegawai->aktif)) {
-            $this->catatGagal($user->id, $email, $ip, 'akun_nonaktif');
-            throw new LoginGagal('akun_nonaktif', 403, self::PESAN_NONAKTIF);
-        }
-
-        if (! $user->penugasanAktif()->exists()) {
-            $this->catatGagal($user->id, $email, $ip, 'tanpa_peran_aktif');
-            throw new LoginGagal('tanpa_peran_aktif', 403, 'Akun Anda belum memiliki peran aktif. Hubungi admin satker Anda.');
-        }
-
-        $this->audit->record('users', $user->id, 'LOGIN', null, ['hasil' => 'berhasil'], $user->id);
-
+        $this->audit->record('USERS', $user->id, 'LOGIN', null, ['hasil' => 'berhasil'], $user->id);
         return $user;
     }
 
-    private function catatGagal(?int $userId, string $email, string $ip, string $alasan): void
+    public function daftar(array $data, string $ip): User
     {
-        $this->audit->record(
-            $userId === null ? 'LOGIN' : 'users',
-            $userId ?? 0,
-            'LOGIN',
-            null,
-            ['hasil' => 'gagal', 'alasan' => $alasan, 'email' => $email],
-            $userId,
-        );
+        $this->checkCaptcha($data['captcha_token'], $ip);
+        $nip = trim($data['nip']);
+        $email = mb_strtolower(trim($data['email']));
+        if (! preg_match('/^[0-9]{18}$/', $nip)) {
+            throw ValidationException::withMessages(['nip' => 'NIP harus terdiri dari tepat 18 digit angka.']);
+        }
+        $pegawai = DB::table('PEGAWAI')->where('nip', $nip)->first();
+        if (!$pegawai) throw ValidationException::withMessages(['nip' => "NIP {$nip} belum terdaftar di sistem. Silakan minta Admin Satker Anda untuk menginput data pegawai terlebih dahulu."]);
+        if (User::query()->where('pegawai_id', $pegawai->id)->exists()) throw ValidationException::withMessages(['nip' => "NIP {$nip} sudah memiliki akun terdaftar."]);
+        if (!(bool)$pegawai->aktif) throw ValidationException::withMessages(['nip' => 'Pegawai nonaktif tidak dapat mendaftar.']);
+        $name = fn($value) => mb_strtolower(preg_replace('/\s+/u', ' ', trim((string)$value)) ?? '');
+        if ($name($pegawai->nama) !== $name($data['nama_lengkap'])) throw ValidationException::withMessages(['nama_lengkap' => 'Nama tidak sesuai dengan data pegawai.']);
+        $placement = DB::table('PENEMPATAN_PEGAWAI')->where('pegawai_id', $pegawai->id)->where('mulai', '<=', now()->toDateString())->where(fn($q) => $q->whereNull('selesai')->orWhere('selesai', '>=', now()->toDateString()))->orderByDesc('utama')->first();
+        if (!$placement) throw ValidationException::withMessages(['nip' => 'Pegawai belum memiliki penempatan aktif.']);
+        try { $identity = $this->firebase->verifikasiEmail($data['id_token']); }
+        catch (FirebaseAuthException $e) { Log::notice('Token verifikasi email Firebase ditolak', ['reason' => $e->alasan]); throw ValidationException::withMessages(['id_token' => 'Verifikasi email gagal atau tautan sudah kedaluwarsa.']); }
+        if (!$identity->emailVerified || $identity->email !== $email) throw ValidationException::withMessages(['id_token' => 'Email belum terverifikasi atau tidak cocok dengan email pendaftaran.']);
+        return DB::transaction(function() use ($pegawai, $email, $data) {
+            $locked = DB::table('PEGAWAI')->where('id', $pegawai->id)->lockForUpdate()->first();
+            if (User::query()->where('pegawai_id', $locked->id)->exists()) throw ValidationException::withMessages(['nip' => "NIP {$locked->nip} sudah memiliki akun terdaftar."]);
+            // NIP tetap menjadi identitas pegawai di PEGAWAI.nip; username akun memakai email login.
+            $user = User::create(['pegawai_id' => $locked->id, 'username' => $email, 'email_login' => $email, 'password_hash' => bin2hex(random_bytes(32)), 'aktif' => true, 'wajib_ganti_password' => false]);
+            $this->audit->record('USERS', $user->id, 'CREATE', null, ['pegawai_id' => $user->pegawai_id, 'email_login' => $email, 'aktif' => true]);
+            return $user;
+        });
+    }
+
+    public function lupaKataSandi(array $data, string $ip): void
+    {
+        $this->checkCaptcha($data['captcha_token'], $ip);
+        $email = mb_strtolower(trim($data['email']));
+        try { $this->firebase->sendPasswordReset($email); }
+        catch (FirebaseAuthException $e) {
+            if ($e->alasan !== FirebaseAuthException::KREDENSIAL_SALAH) Log::warning('Firebase password reset service unavailable', ['reason'=>$e->alasan]);
+        }
+    }
+
+    private function checkCaptcha(string $token, string $ip): void
+    {
+        if (!$this->captcha->verify($token, $ip)) throw ValidationException::withMessages(['captcha_token' => 'Verifikasi captcha gagal. Muat ulang captcha lalu coba lagi.']);
     }
 }

@@ -10,6 +10,7 @@ import {
   CalendarDays,
   ScanEye,
   History,
+  UserCheck,
 } from 'lucide-react'
 export const navigation = [
   { label: 'Beranda', path: '/', icon: House, key: 'b', group: 'Ruang kerja' },
@@ -20,6 +21,7 @@ export const navigation = [
     key: 'p',
     group: 'Pengguna dan organisasi',
   },
+  { label: 'Approval Akun', path: '/approval-akun', icon: UserCheck, key: 'q', group: 'Pengguna dan organisasi' },
   {
     label: 'Unit organisasi',
     path: '/unit',

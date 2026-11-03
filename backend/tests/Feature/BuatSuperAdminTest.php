@@ -22,7 +22,7 @@ class BuatSuperAdminTest extends TestCase
 
     public function test_gagal_bila_role_belum_di_seed(): void
     {
-        $this->artisan('simris:buat-super-admin', ['email' => 'admin@simris.test'])->assertFailed();
+        $this->artisan('simris:buat-super-admin', ['email' => 'admin@simris.test'])->expectsQuestion('Kata sandi (minimal 8 karakter)', 'LocalPass#123')->expectsQuestion('Ulangi kata sandi', 'LocalPass#123')->assertFailed();
 
         $this->assertSame(0, User::query()->count());
     }
@@ -31,7 +31,7 @@ class BuatSuperAdminTest extends TestCase
     {
         $this->seed(RoleSeeder::class);
 
-        $this->artisan('simris:buat-super-admin', ['email' => 'Admin@Simris.Test'])->assertSuccessful();
+        $this->artisan('simris:buat-super-admin', ['email' => 'Admin@Simris.Test'])->expectsQuestion('Kata sandi (minimal 8 karakter)', 'LocalPass#123')->expectsQuestion('Ulangi kata sandi', 'LocalPass#123')->assertSuccessful();
 
         $user = User::query()->where('email_login', 'admin@simris.test')->firstOrFail();
         $this->assertNull($user->pegawai_id);
@@ -43,9 +43,9 @@ class BuatSuperAdminTest extends TestCase
     public function test_super_admin_kedua_tidak_bisa_dibuat(): void
     {
         $this->seed(RoleSeeder::class);
-        $this->artisan('simris:buat-super-admin', ['email' => 'admin@simris.test'])->assertSuccessful();
+        $this->artisan('simris:buat-super-admin', ['email' => 'admin@simris.test'])->expectsQuestion('Kata sandi (minimal 8 karakter)', 'LocalPass#123')->expectsQuestion('Ulangi kata sandi', 'LocalPass#123')->assertSuccessful();
 
-        $this->artisan('simris:buat-super-admin', ['email' => 'lain@simris.test', '--username' => 'lain'])->assertFailed();
+        $this->artisan('simris:buat-super-admin', ['email' => 'lain@simris.test', '--username' => 'lain'])->expectsQuestion('Kata sandi (minimal 8 karakter)', 'LocalPass#123')->expectsQuestion('Ulangi kata sandi', 'LocalPass#123')->assertFailed();
 
         $this->assertSame(1, $this->jumlahSuperAdmin());
         $this->assertSame(1, User::query()->count());
@@ -55,7 +55,7 @@ class BuatSuperAdminTest extends TestCase
     {
         $this->seed(RoleSeeder::class);
 
-        $this->artisan('simris:buat-super-admin', ['email' => 'bukan-email'])->assertFailed();
+        $this->artisan('simris:buat-super-admin', ['email' => 'bukan-email'])->expectsQuestion('Kata sandi (minimal 8 karakter)', 'LocalPass#123')->expectsQuestion('Ulangi kata sandi', 'LocalPass#123')->assertFailed();
 
         $this->assertSame(0, User::query()->count());
     }

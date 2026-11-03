@@ -10,99 +10,47 @@ use App\Support\Firebase\FirebaseIdentity;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
-/**
- * Memakai REST API Firebase Authentication (Identity Toolkit) lewat HTTP client Laravel,
- * tanpa paket pihak ketiga. Hanya untuk alur login dan atur ulang kata sandi;
- * membuat atau menonaktifkan akun Firebase (Admin API) dikerjakan di fase pengelolaan user.
- */
 final class RestFirebaseAuthGateway implements FirebaseAuthGateway
 {
     private const BASE_URL = 'https://identitytoolkit.googleapis.com/v1/';
 
-    public function __construct(private readonly string $apiKey)
-    {
-    }
+    public function __construct(private readonly string $apiKey) {}
 
     public function signInWithPassword(string $email, string $password): FirebaseIdentity
     {
-        $login = $this->post('accounts:signInWithPassword', [
-            'email' => $email,
-            'password' => $password,
-            'returnSecureToken' => true,
-        ]);
+        $login = $this->post('accounts:signInWithPassword', ['email'=>$email,'password'=>$password,'returnSecureToken'=>true]);
+        if (empty($login['idToken'])) throw new FirebaseAuthException(FirebaseAuthException::LAYANAN_GAGAL);
+        return $this->verifikasiEmail((string)$login['idToken']);
+    }
 
-        $idToken = $login['idToken'] ?? null;
-        if (! is_string($idToken) || $idToken === '') {
-            throw new FirebaseAuthException(FirebaseAuthException::LAYANAN_GAGAL);
+    public function verifikasiEmail(string $idToken): FirebaseIdentity
+    {
+        $result = $this->post('accounts:lookup', ['idToken' => $idToken]);
+        $user = $result['users'][0] ?? null;
+        if (!is_array($user) || empty($user['localId']) || empty($user['email'])) {
+            throw new FirebaseAuthException(FirebaseAuthException::KREDENSIAL_SALAH);
         }
-
-        // Cek ulang token ke Firebase: ambil status akun (disabled, emailVerified).
-        $lookup = $this->post('accounts:lookup', ['idToken' => $idToken]);
-        $akun = $lookup['users'][0] ?? null;
-        if (! is_array($akun) || ! isset($akun['localId'])) {
-            throw new FirebaseAuthException(FirebaseAuthException::LAYANAN_GAGAL);
-        }
-        if (! empty($akun['disabled'])) {
-            throw new FirebaseAuthException(FirebaseAuthException::AKUN_DINONAKTIFKAN);
-        }
-
-        return new FirebaseIdentity(
-            uid: (string) $akun['localId'],
-            email: mb_strtolower((string) ($akun['email'] ?? '')),
-            emailVerified: (bool) ($akun['emailVerified'] ?? false),
-        );
+        return new FirebaseIdentity((string)$user['localId'], mb_strtolower((string)$user['email']), (bool)($user['emailVerified'] ?? false));
     }
 
     public function sendPasswordReset(string $email): void
     {
-        $this->post('accounts:sendOobCode', [
-            'requestType' => 'PASSWORD_RESET',
-            'email' => $email,
-        ]);
+        $this->post('accounts:sendOobCode', ['requestType'=>'PASSWORD_RESET','email'=>$email]);
     }
 
     /** @return array<string, mixed> */
-    private function post(string $jalur, array $muatan): array
+    private function post(string $path, array $payload): array
     {
-        if ($this->apiKey === '') {
-            throw new FirebaseAuthException(FirebaseAuthException::LAYANAN_GAGAL);
-        }
-
+        if ($this->apiKey === '') throw new FirebaseAuthException(FirebaseAuthException::LAYANAN_GAGAL);
         try {
-            $respons = Http::acceptJson()
-                ->asJson()
-                ->timeout(8)
-                ->post(self::BASE_URL.$jalur.'?key='.urlencode($this->apiKey), $muatan);
+            $response = Http::acceptJson()->asJson()->timeout(8)->post(self::BASE_URL.$path.'?key='.urlencode($this->apiKey), $payload);
         } catch (ConnectionException $e) {
             throw new FirebaseAuthException(FirebaseAuthException::LAYANAN_GAGAL, $e);
         }
-
-        if ($respons->successful()) {
-            $isi = $respons->json();
-
-            return is_array($isi) ? $isi : [];
-        }
-
-        $kode = (string) data_get($respons->json(), 'error.message', '');
-
-        throw new FirebaseAuthException($this->petakanGalat($kode));
-    }
-
-    private function petakanGalat(string $kode): string
-    {
-        // Pesan Firebase bisa berbentuk "KODE : keterangan", jadi cocokkan awalannya.
-        foreach (['EMAIL_NOT_FOUND', 'INVALID_PASSWORD', 'INVALID_LOGIN_CREDENTIALS', 'INVALID_EMAIL', 'MISSING_PASSWORD'] as $awalan) {
-            if (str_starts_with($kode, $awalan)) {
-                return FirebaseAuthException::KREDENSIAL_SALAH;
-            }
-        }
-        if (str_starts_with($kode, 'USER_DISABLED')) {
-            return FirebaseAuthException::AKUN_DINONAKTIFKAN;
-        }
-        if (str_starts_with($kode, 'TOO_MANY_ATTEMPTS_TRY_LATER')) {
-            return FirebaseAuthException::TERLALU_BANYAK_PERCOBAAN;
-        }
-
-        return FirebaseAuthException::LAYANAN_GAGAL;
+        if ($response->successful()) return (array)$response->json();
+        $code = (string)data_get($response->json(), 'error.message', '');
+        $known = ['INVALID_ID_TOKEN','TOKEN_EXPIRED','EMAIL_NOT_FOUND','INVALID_PASSWORD','INVALID_LOGIN_CREDENTIALS','EMAIL_NOT_FOUND','INVALID_EMAIL'];
+        $authError = collect($known)->contains(fn($prefix) => str_starts_with($code, $prefix));
+        throw new FirebaseAuthException($authError ? FirebaseAuthException::KREDENSIAL_SALAH : FirebaseAuthException::LAYANAN_GAGAL, kodeFirebase: $code);
     }
 }

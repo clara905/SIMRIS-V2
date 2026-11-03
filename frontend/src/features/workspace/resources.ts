@@ -12,6 +12,7 @@ import {
   CalendarDays,
   History,
   Paperclip,
+  UserCheck,
 } from 'lucide-react'
 export const assessmentStatuses = [
   'DRAFT',
@@ -261,6 +262,7 @@ export const modules = [
       resource('roles', 'Daftar role', ['kode', 'nama']),
     ],
   },
+  { path: '/approval-akun', label: 'Approval Akun', group: 'Administrasi', icon: UserCheck, roles: ['ADMIN_SATKER'], description: 'Tinjau pendaftaran staf dan tetapkan role.' , resources: [] },
   {
     path: '/audit',
     label: 'Jejak audit',

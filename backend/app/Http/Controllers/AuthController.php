@@ -36,13 +36,27 @@ class AuthController extends Controller
         }
         $user = DB::transaction(function () use ($request, $loginInput, $audit, $scope, $totp): ?User {
             $user = User::query()
-                ->where(fn ($q) => $q->where('username', $loginInput)->orWhere('email_login', $loginInput))
+                ->where(fn ($q) => $q->where('email_login', $loginInput)->orWhereHas('pegawai', fn ($pegawai) => $pegawai->where('nip', $loginInput)))
                 ->lockForUpdate()
                 ->first();
-            $valid = Hash::check($request->input('password'), $user?->password_hash ?? '$2y$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.');
-            if (! $user || ! $valid || ! $user->aktif || (config('security.super_admin_totp') && $scope->isSuper($user) && ! $totp->verify($user, $request->input('totp')))) {
-                $reason = ! $user ? 'user_not_found' : (! $valid ? 'password_mismatch' : (! $user->aktif ? 'inactive' : 'totp_failed'));
-                $audit->record('USERS', $user?->id ?? 0, 'LOGIN_FAILED:'.$reason, ['login' => $loginInput, 'user_id' => $user?->id]);
+            $valid = false;
+            if ($user) {
+                try {
+                    $identity = app(\App\Contracts\FirebaseAuthGateway::class)->signInWithPassword($user->email_login, (string)$request->input('password'));
+                    $valid = !(bool)config('simris.firebase.wajib_email_terverifikasi') || $identity->emailVerified;
+                } catch (\App\Support\Firebase\FirebaseAuthException) {
+                    $valid = false;
+                }
+            }
+            if (! $user || ! $valid) {
+                $audit->record('USERS', $user?->id ?? 0, 'LOGIN_FAILED', null, ['hasil' => 'gagal']);
+                return null;
+            }
+            if (! $user->aktif || ($user->pegawai !== null && ! $user->pegawai->aktif) || ! $user->penugasanAktif()->exists()) {
+                throw new \App\Exceptions\LoginGagal('akun_pending', 403, 'Akun menunggu persetujuan Admin Satker.');
+            }
+            if (config('security.super_admin_totp') && $scope->isSuper($user) && ! $totp->verify($user, $request->input('totp'))) {
+                $audit->record('USERS', $user->id, 'LOGIN_FAILED', null, ['hasil' => 'gagal', 'alasan' => 'totp']);
 
                 return null;
             }
@@ -54,7 +68,7 @@ class AuthController extends Controller
             RateLimiter::hit($key, config('security.login_lock_seconds'));
             RateLimiter::hit($ipKey, config('security.login_lock_seconds'));
 
-            return response()->json(['message' => 'Kredensial tidak valid atau akun tidak dapat digunakan.'], 401);
+            return response()->json(['message' => 'NIP/email atau kata sandi salah.'], 401);
         }
         RateLimiter::clear($key);
         Auth::guard('web')->login($user);
@@ -117,7 +131,7 @@ class AuthController extends Controller
         $validated = $request->validate([
             'nama' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('USERS', 'email_login')->ignore($user->id)],
-            'nip' => ['nullable', 'string', 'max:18'],
+            'nip' => ['nullable', 'string', 'regex:/^[0-9]{18}$/'],
             'jenis_kepegawaian' => ['nullable', 'string', 'max:255'],
         ]);
         if (isset($validated['nip']) && ! ctype_digit($validated['nip'])) {

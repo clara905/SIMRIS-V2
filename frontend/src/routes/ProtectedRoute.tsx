@@ -39,9 +39,17 @@ export function ProtectedRoute() {
   if (session.data.wajib_ganti_password && location.pathname !== '/ganti-password')
     return <Navigate to="/ganti-password" replace />
   if (
+    import.meta.env.VITE_API_MOCK !== 'true' &&
+    !session.data.roleCodes?.length &&
+    location.pathname !== '/pengajuan-role'
+  )
+    return <Navigate to="/pengajuan-role" replace />
+  if (import.meta.env.VITE_API_MOCK !== 'true' && session.data.roleCodes?.length && location.pathname === '/pengajuan-role')
+    return <Navigate to="/" replace />
+  if (
     import.meta.env.VITE_API_MOCK === 'true'
       ? session.data.role !== 'Super admin'
-      : !session.data.roleCodes?.length
+      : false
   )
     return (
       <Navigate

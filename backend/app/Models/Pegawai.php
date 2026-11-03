@@ -8,10 +8,12 @@ use App\Models\Concerns\Auditable;
 use App\Models\Concerns\SerializesLocalDates;
 use Database\Factories\PegawaiFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 
 class Pegawai extends Model
 {
+    
     use Auditable, SerializesLocalDates;
 
     /** @use HasFactory<PegawaiFactory> */

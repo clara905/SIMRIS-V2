@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\LogAudit;
+use App\Models\Pegawai;
+use App\Models\PenempatanPegawai;
 use App\Models\UnitOrganisasi;
 use App\Models\User;
 use App\Services\AuditService;
@@ -68,14 +70,50 @@ test('inactive sessions cannot read me', function (): void {
     $this->actingAs(User::factory()->create(['aktif' => false]))->getJson('/api/me')->assertUnauthorized();
 });
 test('scope includes descendants but not another unit and ignores expired and future grants', function (): void {
-    $user = User::factory()->create();
     $root = UnitOrganisasi::factory()->create();
     $child = UnitOrganisasi::factory()->create(['parent_id' => $root->id]);
     $other = UnitOrganisasi::factory()->create();
+    $pegawai = Pegawai::factory()->create();
+    PenempatanPegawai::factory()->create(['pegawai_id' => $pegawai->id, 'unit_id' => $root->id]);
+    $user = User::factory()->create(['pegawai_id' => $pegawai->id]);
     grantRole($user, 'ADMIN_SATKER', $root->id);
     grantRole($user, 'STAFF', $other->id, ['mulai' => now()->addDay()]);
     grantRole($user, 'KABID', $other->id, ['selesai' => now()->subHour()]);
     expect(app(ScopeUnit::class)->ids($user))->toEqualCanonicalizing([$root->id, $child->id]);
+});
+test('moving a user placement removes old unit access until role scope matches the new placement', function (): void {
+    $oldUnit = UnitOrganisasi::factory()->create();
+    $newUnit = UnitOrganisasi::factory()->create();
+    $newChild = UnitOrganisasi::factory()->create(['parent_id' => $newUnit->id]);
+    $newGrandchild = UnitOrganisasi::factory()->create(['parent_id' => $newChild->id]);
+    $pegawai = Pegawai::factory()->create();
+    $placement = PenempatanPegawai::factory()->create(['pegawai_id' => $pegawai->id, 'unit_id' => $oldUnit->id]);
+    $user = User::factory()->create(['pegawai_id' => $pegawai->id]);
+    grantRole($user, 'KASATKER', $oldUnit->id);
+
+    $placement->update(['unit_id' => $newUnit->id]);
+
+    expect(app(ScopeUnit::class)->idsForRoles($user, ['KASATKER']))->toBe([]);
+    expect(app(ScopeUnit::class)->ids($user))->toBe([]);
+
+    grantRole($user, 'KASATKER', $newUnit->id);
+    expect(app(ScopeUnit::class)->idsForRoles($user, ['KASATKER']))->toEqualCanonicalizing([$newUnit->id, $newChild->id, $newGrandchild->id]);
+});
+test('admin satker scope includes its full descendant tree when admin placement is below the satker root', function (): void {
+    $kemhan = UnitOrganisasi::factory()->create(['jenis' => 'SATKER', 'parent_id' => null]);
+    $pamsis = UnitOrganisasi::factory()->create(['jenis' => 'BIDANG', 'parent_id' => $kemhan->id]);
+    $pamsisInfosan = UnitOrganisasi::factory()->create(['jenis' => 'SUBBIDANG', 'parent_id' => $pamsis->id]);
+    $pegawai = Pegawai::factory()->create();
+    $placement = PenempatanPegawai::factory()->create(['pegawai_id' => $pegawai->id, 'unit_id' => $pamsisInfosan->id]);
+    $admin = User::factory()->create(['pegawai_id' => $pegawai->id]);
+    grantRole($admin, 'ADMIN_SATKER', $kemhan->id);
+
+    expect(app(ScopeUnit::class)->idsForRoles($admin, ['ADMIN_SATKER']))->toEqualCanonicalizing([$kemhan->id, $pamsis->id, $pamsisInfosan->id]);
+
+    $otherSatker = UnitOrganisasi::factory()->create(['jenis' => 'SATKER', 'parent_id' => null]);
+    $placement->update(['unit_id' => $otherSatker->id]);
+
+    expect(app(ScopeUnit::class)->idsForRoles($admin, ['ADMIN_SATKER']))->toBe([]);
 });
 test('a super admin with a null scope can see all units', function (): void {
     $user = User::factory()->create();

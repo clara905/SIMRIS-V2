@@ -9,21 +9,15 @@ class LoginRequest extends ApiRequest
     public function rules(): array
     {
         return [
-            'email' => [
+            'login' => [
                 'required',
                 'string',
-                'email:rfc',
                 'max:255',
             ],
             'password' => [
                 'required',
                 'string',
                 'max:255',
-            ],
-            'captcha_token' => [
-                'required',
-                'string',
-                'max:4096',
             ],
             'totp' => [
                 'nullable',
@@ -36,10 +30,8 @@ class LoginRequest extends ApiRequest
     public function messages(): array
     {
         return [
-            'email.required' => 'Email wajib diisi.',
-            'email.email' => 'Format email tidak valid.',
+            'login.required' => 'NIP atau email wajib diisi.',
             'password.required' => 'Kata sandi wajib diisi.',
-            'captcha_token.required' => 'Selesaikan captcha terlebih dahulu.',
             'totp.regex' => 'Kode OTP harus terdiri dari 6 digit.',
         ];
     }

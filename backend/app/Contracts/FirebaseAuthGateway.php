@@ -9,18 +9,12 @@ use App\Support\Firebase\FirebaseIdentity;
 
 interface FirebaseAuthGateway
 {
-    /**
-     * Login ke Firebase Authentication dengan email dan kata sandi.
-     *
-     * @throws FirebaseAuthException bila kredensial salah, akun dinonaktifkan di Firebase,
-     *                               terlalu banyak percobaan, atau layanan tidak tersedia.
-     */
+    /** Authenticate with the password stored by Firebase. */
     public function signInWithPassword(string $email, string $password): FirebaseIdentity;
 
-    /**
-     * Minta Firebase mengirim email atur ulang kata sandi.
-     *
-     * @throws FirebaseAuthException
-     */
+    /** Verify a Firebase ID token and return its verified email identity. */
+    public function verifikasiEmail(string $idToken): FirebaseIdentity;
+
+    /** Send Firebase's password reset email without revealing whether the account exists. */
     public function sendPasswordReset(string $email): void;
 }

@@ -31,6 +31,7 @@ import { KelolaPage } from '../satker/KelolaPage'
 import { KelolaUnit } from '../satker/KelolaUnit'
 import { KelolaPegawai } from '../satker/KelolaPegawai'
 import { KelolaPengguna } from '../satker/KelolaPengguna'
+import { ApprovalPage } from '../approval/ApprovalPage'
 import { SatkerBeranda } from '../satker/SatkerBeranda'
 import { useSatkerUnit } from '../satker/api'
 import { isAssetPendingAssessment } from '../aset/assessment'
@@ -121,6 +122,7 @@ export function BackendWorkspace() {
   const [logoutConfirm, setLogoutConfirm] = useState(false)
   const [navSearch, setNavSearch] = useState('')
   const roleCodes = session.data?.roleCodes ?? []
+  const pendingApproval = useQuery({ queryKey: ['approval-akun-count'], queryFn: async () => (await api.get<{ data: unknown[] }>('/api/v1/approval-akun')).data.data.length, enabled: roleCodes.includes('ADMIN_SATKER'), refetchInterval: 10_000, retry: false })
   const isSatkerAdmin = roleCodes.includes('ADMIN_SATKER') && !roleCodes.includes('SUPER_ADMIN')
   const satkerUnit = useSatkerUnit()
   const allowed = modules.filter(
@@ -142,6 +144,7 @@ export function BackendWorkspace() {
             <NavLink to={m.path} end onClick={() => setMobile(false)}>
               <m.icon size={18} />
               <span>{m.label}</span>
+              {m.path === '/approval-akun' && Boolean(pendingApproval.data) && <span className="ws-badge warning">{pendingApproval.data}</span>}
               {m.path === location.pathname && <span className="ws-active-dot" />}
             </NavLink>
           </div>
@@ -264,6 +267,8 @@ export function BackendWorkspace() {
             <KelolaPegawai superAdmin />
           ) : active.path === '/pengguna' && roleCodes.includes('SUPER_ADMIN') ? (
             <KelolaPengguna superAdmin />
+          ) : active.path === '/approval-akun' ? (
+            <ApprovalPage />
           ) : (
             <>
               <div className="ws-page-heading">

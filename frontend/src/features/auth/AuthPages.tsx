@@ -8,17 +8,16 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { Eye, EyeOff, LockKeyhole, ShieldCheck, UserPlus } from 'lucide-react'
 import { useEffect, useRef } from 'react'
-import { loginWithFirebase, loginWithPassword, register, sessionKey, normalizeSession } from '../../api/auth'
+import { loginWithFirebase, registerWithFirebase, sessionKey } from '../../api/auth'
 import { errorMessage, fieldErrors } from '../../api/client'
 import s from './Auth.module.css'
 
 /* ─── Login ─────────────────────────────────────────────────────────────── */
 
 const loginSchema = z.object({
-  email: z.string().min(1, 'Masukkan username atau alamat email.'),
+  email: z.string().min(1, 'Masukkan NIP atau email.'),
   password: z.string().min(1, 'Masukkan kata sandi.'),
-  captcha_token: z.string().optional(),
-  totp: z.string().optional(),
+  captcha_token: z.string().min(1, 'Selesaikan verifikasi captcha.'),
 })
 
 export function LoginPage() {
@@ -27,9 +26,10 @@ export function LoginPage() {
   const client = useQueryClient()
   const [error, setError] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const firebaseAuth = import.meta.env.VITE_FIREBASE_AUTH === 'true'
   const [captchaReady, setCaptchaReady] = useState(false)
-  const [captchaSiteKey, setCaptchaSiteKey] = useState(import.meta.env.VITE_RECAPTCHA_SITE_KEY || '')
+  const [captchaSiteKey, setCaptchaSiteKey] = useState(
+    import.meta.env.VITE_RECAPTCHA_SITE_KEY || import.meta.env.VITE_RECAPTCHA_SITE_KEY_PUBLIC || '',
+  )
   const [captchaConfigError, setCaptchaConfigError] = useState('')
   const captchaElement = useRef<HTMLDivElement>(null)
   const captchaWidgetId = useRef<number | null>(null)
@@ -74,7 +74,7 @@ export function LoginPage() {
       if (!window.grecaptcha || !captchaElement.current || captchaWidgetId.current !== null) return
       captchaWidgetId.current = window.grecaptcha.render(captchaElement.current, {
         sitekey: siteKey,
-        callback: (token) => {
+        callback: (token: string) => {
           captchaToken.current = token
           setValue('captcha_token', token, { shouldValidate: true })
           clearErrors('captcha_token')
@@ -132,31 +132,22 @@ export function LoginPage() {
       <main className={s.formSide}>
         <form
           className={s.form}
+          // eslint-disable-next-line react-hooks/refs
           onSubmit={handleSubmit(async (values) => {
             setError('')
             try {
-              if (firebaseAuth) {
-                await loginWithFirebase({
-                  email: values.email,
-                  password: values.password,
-                  captcha_token: captchaToken.current,
-                })
-              } else {
-                await loginWithPassword({
-                  login: values.email,
-                  password: values.password,
-                  totp: values.totp,
-                })
-              }
+              await loginWithFirebase({
+              email: values.email,
+                password: values.password,
+                captcha_token: captchaToken.current,
+              })
               await client.invalidateQueries({ queryKey: sessionKey })
               navigate(location.state?.from || '/', { replace: true })
             } catch (err) {
               setError(errorMessage(err))
-              if (firebaseAuth) {
-                captchaToken.current = ''
-                setValue('captcha_token', '', { shouldValidate: false })
-                if (captchaWidgetId.current !== null) window.grecaptcha?.reset(captchaWidgetId.current)
-              }
+              captchaToken.current = ''
+              setValue('captcha_token', '', { shouldValidate: false })
+              if (captchaWidgetId.current !== null) window.grecaptcha?.reset(captchaWidgetId.current)
               for (const [key, messages] of Object.entries(fieldErrors(err))) {
                 if (['email', 'password', 'captcha_token'].includes(key)) {
                   setFieldError(key as 'email' | 'password' | 'captcha_token', { message: messages[0] })
@@ -167,14 +158,14 @@ export function LoginPage() {
           noValidate
         >
           <h1>Masuk ke SIMRIS</h1>
-          <p>Gunakan email dan kata sandi akun SIMRIS Anda.</p>
+          <p>Gunakan NIP atau email dan kata sandi akun SIMRIS Anda.</p>
 
-          <label htmlFor="email">{firebaseAuth ? 'Email' : 'Username atau Email'}</label>
+          <label htmlFor="email">NIP atau email</label>
           <input
             id="email"
-            type={firebaseAuth ? 'email' : 'text'}
+            type="text"
             autoComplete="username"
-            placeholder={firebaseAuth ? 'nama@instansi.go.id' : 'Masukkan username atau email'}
+            placeholder="NIP atau nama@instansi.go.id"
             {...reg('email')}
             aria-invalid={!!errors.email}
             aria-describedby="email-error"
@@ -209,18 +200,19 @@ export function LoginPage() {
           <span id="password-error" className="field-error" aria-live="polite">
             {errors.password?.message}
           </span>
+          <p className={s.switchMode}><Link to="/lupa-kata-sandi">Lupa kata sandi?</Link></p>
 
-          {firebaseAuth && captchaSiteKey ? (
+          {captchaSiteKey ? (
             <div className={s.captchaContainer}>
               <div ref={captchaElement} />
               {!captchaReady && <span>Memuat verifikasi captcha…</span>}
               <span className="field-error" aria-live="polite">{errors.captcha_token?.message}</span>
             </div>
-          ) : firebaseAuth ? (
+          ) : (
             <p role="alert" className="field-error">
               {captchaConfigError || 'reCAPTCHA belum dikonfigurasi. Isi VITE_RECAPTCHA_SITE_KEY di backend.'}
             </p>
-          ) : null}
+          )}
 
           {error && (
             <p role="alert" className="field-error">
@@ -228,7 +220,7 @@ export function LoginPage() {
             </p>
           )}
 
-          <button className="primary" type="submit" disabled={isSubmitting}>
+          <button className="primary" type="submit" disabled={isSubmitting || !captchaSiteKey || !captchaReady}>
             <LockKeyhole size={16} />
             {isSubmitting ? 'Memeriksa akun…' : 'Masuk ke ruang kerja'}
           </button>
@@ -259,10 +251,12 @@ export function LoginPage() {
 
 const registerSchema = z
   .object({
-    username: z.string().min(3, 'Username minimal 3 karakter.').max(255),
+    nip: z.string().min(1, 'Masukkan NIP.').regex(/^\d{18}$/, 'NIP harus terdiri dari tepat 18 digit angka.'),
+    nama_lengkap: z.string().min(1, 'Masukkan nama lengkap.'),
     email: z.string().min(1, 'Masukkan email.').email('Format email tidak valid.'),
     password: z.string().min(8, 'Kata sandi minimal 8 karakter.'),
     password_confirmation: z.string().min(1, 'Konfirmasi kata sandi wajib diisi.'),
+    captcha_token: z.string().min(1, 'Selesaikan verifikasi captcha.'),
   })
   .refine((v) => v.password === v.password_confirmation, {
     path: ['password_confirmation'],
@@ -271,17 +265,109 @@ const registerSchema = z
 
 export function RegisterPage() {
   const navigate = useNavigate()
-  const client = useQueryClient()
   const [error, setError] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
-
+  const [captchaReady, setCaptchaReady] = useState(false)
+  const [captchaSiteKey, setCaptchaSiteKey] = useState(
+    import.meta.env.VITE_RECAPTCHA_SITE_KEY || import.meta.env.VITE_RECAPTCHA_SITE_KEY_PUBLIC || '',
+  )
+  const [captchaConfigError, setCaptchaConfigError] = useState('')
+  const [tautanTerkirim, setTautanTerkirim] = useState(false)
+  const [emailTerverifikasi, setEmailTerverifikasi] = useState(false)
+  const captchaElement = useRef<HTMLDivElement>(null)
+  const captchaWidgetId = useRef<number | null>(null)
+  const captchaToken = useRef('')
+  const firebaseToken = useRef('')
   const {
     register: reg,
     handleSubmit,
     setError: setFieldError,
+    setValue,
+    clearErrors,
     formState: { errors, isSubmitting },
   } = useForm<z.infer<typeof registerSchema>>({ resolver: zodResolver(registerSchema) })
+
+  useEffect(() => {
+    let cancelled = false
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get('oobCode')
+    if (!code || params.get('mode') !== 'verifyEmail') return
+    void Promise.all([import('firebase/auth'), import('../../lib/firebase')]).then(async ([authSdk, firebase]) => {
+      if (cancelled || !firebase.firebaseConfigured) return
+      try {
+        await authSdk.applyActionCode(firebase.firebaseAuth, code)
+        const email = window.localStorage.getItem('simris-email-link') || ''
+        const password = window.sessionStorage.getItem('simris-signup-password') || ''
+        if (!email || !password) throw new Error('Silakan masuk ke email pendaftaran, lalu masukkan kembali password untuk menyelesaikan pendaftaran.')
+        const credential = await authSdk.signInWithEmailAndPassword(firebase.firebaseAuth, email, password)
+        await credential.user.reload()
+        firebaseToken.current = await credential.user.getIdToken(true)
+        if (cancelled) return
+        setValue('email', email, { shouldValidate: true })
+        setEmailTerverifikasi(true)
+        window.sessionStorage.removeItem('simris-signup-password')
+        window.history.replaceState({}, document.title, '/daftar')
+        toast.success('Email berhasil diverifikasi. Kirim pendaftaran Anda.')
+      } catch (verificationError) {
+        if (!cancelled) setError(verificationError instanceof Error ? verificationError.message : 'Tautan verifikasi tidak valid atau sudah kedaluwarsa.')
+      }
+    })
+    return () => { cancelled = true }
+  }, [setValue])
+
+  useEffect(() => {
+    let dibatalkan = false
+    if (captchaSiteKey) return () => { dibatalkan = true }
+    void api.get<{ recaptcha_site_key?: string }>('/api/v1/config').then(({ data }) => {
+      if (dibatalkan) return
+      setCaptchaSiteKey(data.recaptcha_site_key || '')
+      setCaptchaConfigError(data.recaptcha_site_key ? '' : 'Site key captcha kosong di konfigurasi backend.')
+    }).catch(() => {
+      if (!dibatalkan) setCaptchaConfigError('Tidak bisa memuat konfigurasi reCAPTCHA dari backend.')
+    })
+    return () => { dibatalkan = true }
+  }, [captchaSiteKey])
+
+  useEffect(() => {
+    if (!captchaSiteKey || !captchaElement.current) return
+    const renderCaptcha = () => {
+      if (!window.grecaptcha || !captchaElement.current || captchaWidgetId.current !== null) return
+      captchaWidgetId.current = window.grecaptcha.render(captchaElement.current, {
+        sitekey: captchaSiteKey,
+        callback: (token: string) => {
+          captchaToken.current = token
+          setValue('captcha_token', token, { shouldValidate: true })
+          clearErrors('captcha_token')
+        },
+        'expired-callback': () => {
+          captchaToken.current = ''
+          setValue('captcha_token', '', { shouldValidate: true })
+        },
+        'error-callback': () => {
+          captchaToken.current = ''
+          setValue('captcha_token', '', { shouldValidate: true })
+        },
+      })
+      setCaptchaReady(true)
+    }
+    if (window.grecaptcha) {
+      window.grecaptcha.ready(renderCaptcha)
+      return
+    }
+    let script = document.querySelector<HTMLScriptElement>('script[data-simris-recaptcha]')
+    const handleLoad = () => window.grecaptcha?.ready(renderCaptcha)
+    if (!script) {
+      script = document.createElement('script')
+      script.src = 'https://www.google.com/recaptcha/api.js?render=explicit&hl=id'
+      script.async = true
+      script.defer = true
+      script.dataset.simrisRecaptcha = 'true'
+      document.head.appendChild(script)
+    }
+    script.addEventListener('load', handleLoad)
+    return () => script?.removeEventListener('load', handleLoad)
+  }, [captchaSiteKey, clearErrors, setValue])
 
   return (
     <div className={s.page}>
@@ -301,25 +387,49 @@ export function RegisterPage() {
       <main className={s.formSide}>
         <form
           className={s.form}
+          // eslint-disable-next-line react-hooks/refs
           onSubmit={handleSubmit(async (values) => {
             setError('')
             try {
-              const data = await register(values)
-              if (data?.data) {
-                // session was set by the backend – normalise and hydrate cache
-                client.setQueryData(sessionKey, normalizeSession(data.data))
-              } else {
-                await client.invalidateQueries({ queryKey: sessionKey })
+              if (!emailTerverifikasi) {
+                const [{ createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification }, { firebaseAuth, firebaseConfigured }] = await Promise.all([import('firebase/auth'), import('../../lib/firebase')])
+                if (!firebaseConfigured) throw new Error('Firebase belum dikonfigurasi.')
+                let user
+                try {
+                  user = await createUserWithEmailAndPassword(firebaseAuth, values.email, values.password)
+                } catch (firebaseError) {
+                  if (!(firebaseError && typeof firebaseError === 'object' && 'code' in firebaseError && firebaseError.code === 'auth/email-already-in-use')) throw firebaseError
+                  user = await signInWithEmailAndPassword(firebaseAuth, values.email, values.password)
+                }
+                window.sessionStorage.setItem('simris-signup-password', values.password)
+                if (!user.user.emailVerified) await sendEmailVerification(user.user, { url: `${window.location.origin}/daftar` })
+                else {
+                  firebaseToken.current = await user.user.getIdToken(true)
+                  setEmailTerverifikasi(true)
+                  toast.success('Email sudah terverifikasi. Kirim pendaftaran Anda.')
+                  return
+                }
+                window.localStorage.setItem('simris-email-link', values.email)
+                setTautanTerkirim(true)
+                toast.success('Tautan verifikasi dikirim. Buka email, lalu kembali ke halaman ini.')
+                return
               }
-              navigate('/', { replace: true })
+              const data = await registerWithFirebase({ nip: values.nip, nama_lengkap: values.nama_lengkap, email: values.email, id_token: firebaseToken.current, captcha_token: captchaToken.current })
+              toast.success(data.message)
+              navigate('/masuk', { replace: true })
             } catch (err) {
               setError(errorMessage(err))
+              captchaToken.current = ''
+              setValue('captcha_token', '', { shouldValidate: false })
+              if (captchaWidgetId.current !== null) window.grecaptcha?.reset(captchaWidgetId.current)
               for (const [key, messages] of Object.entries(fieldErrors(err))) {
-                if (['username', 'email', 'password', 'password_confirmation'].includes(key)) {
+                if (['nip', 'nama_lengkap', 'email', 'password', 'password_confirmation'].includes(key)) {
                   setFieldError(
-                    key as 'username' | 'email' | 'password' | 'password_confirmation',
+                    key as 'nip' | 'nama_lengkap' | 'email' | 'password' | 'password_confirmation',
                     { message: messages[0] },
                   )
+                } else if (key === 'captcha_token') {
+                  setFieldError('captcha_token', { message: messages[0] })
                 }
               }
             }
@@ -327,22 +437,28 @@ export function RegisterPage() {
           noValidate
         >
           <h1>Buat akun SIMRIS</h1>
-          <p>Isi data berikut untuk mendaftarkan akun Anda.</p>
+          <p>Isi NIP sesuai master pegawai, lalu verifikasi email untuk mengirim pendaftaran.</p>
 
-          <label htmlFor="reg-username">Username</label>
+          <label htmlFor="reg-nip">NIP</label>
           <input
-            id="reg-username"
+            id="reg-nip"
             type="text"
-            autoComplete="username"
-            placeholder="Pilih username unik Anda"
-            {...reg('username')}
-            aria-invalid={!!errors.username}
-            aria-describedby="reg-username-error"
+            autoComplete="off"
+            inputMode="numeric"
+            maxLength={18}
+            placeholder="NIP terdaftar di master pegawai"
+            {...reg('nip')}
+            aria-invalid={!!errors.nip}
+            aria-describedby="reg-nip-error"
             disabled={isSubmitting}
           />
-          <span id="reg-username-error" className="field-error" aria-live="polite">
-            {errors.username?.message}
+          <span id="reg-nip-error" className="field-error" aria-live="polite">
+            {errors.nip?.message}
           </span>
+
+          <label htmlFor="reg-nama">Nama lengkap</label>
+          <input id="reg-nama" type="text" autoComplete="name" placeholder="Sesuai data master pegawai" {...reg('nama_lengkap')} disabled={isSubmitting} />
+          <span className="field-error" aria-live="polite">{errors.nama_lengkap?.message}</span>
 
           <label htmlFor="reg-email">Email</label>
           <input
@@ -411,15 +527,27 @@ export function RegisterPage() {
             {errors.password_confirmation?.message}
           </span>
 
+          {captchaSiteKey ? (
+            <div className={s.captchaContainer}>
+              <div ref={captchaElement} />
+              {!captchaReady && <span>Memuat verifikasi captcha…</span>}
+              <span className="field-error" aria-live="polite">{errors.captcha_token?.message}</span>
+            </div>
+          ) : (
+            <p role="alert" className="field-error">
+              {captchaConfigError || 'reCAPTCHA belum dikonfigurasi di backend.'}
+            </p>
+          )}
+
           {error && (
             <p role="alert" className="field-error">
               {error}
             </p>
           )}
 
-          <button className="primary" type="submit" disabled={isSubmitting}>
+          <button className="primary" type="submit" disabled={isSubmitting || !captchaSiteKey || !captchaReady}>
             <UserPlus size={16} />
-            {isSubmitting ? 'Mendaftarkan akun…' : 'Buat akun'}
+            {isSubmitting ? 'Memproses…' : emailTerverifikasi ? 'Kirim pendaftaran' : tautanTerkirim ? 'Kirim ulang tautan verifikasi' : 'Verifikasi email'}
           </button>
 
           <p className={s.switchMode}>

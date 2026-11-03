@@ -13,7 +13,6 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Str;
 
 /**
  * Satu-satunya jalan membuat SUPER_ADMIN. Hanya boleh berhasil sekali:
@@ -22,7 +21,7 @@ use Illuminate\Support\Str;
 class BuatSuperAdmin extends Command
 {
     protected $signature = 'simris:buat-super-admin
-        {email : Email login (harus sama dengan akun di Firebase)}
+        {email : Email login}
         {--username=superadmin : Username}';
 
     protected $description = 'Membuat satu-satunya akun SUPER_ADMIN (hanya bisa dijalankan sekali)';
@@ -31,12 +30,19 @@ class BuatSuperAdmin extends Command
     {
         $email = mb_strtolower(trim((string) $this->argument('email')));
         $username = trim((string) $this->option('username'));
+        $password = (string) $this->secret('Kata sandi (minimal 8 karakter)');
+        $confirmation = (string) $this->secret('Ulangi kata sandi');
+        if (!hash_equals($password, $confirmation)) {
+            $this->error('Konfirmasi kata sandi tidak sama.');
+            return self::FAILURE;
+        }
 
         $validator = Validator::make(
-            ['email' => $email, 'username' => $username],
+            ['email' => $email, 'username' => $username, 'password' => $password],
             [
                 'email' => ['required', 'email:rfc', 'max:255', 'unique:users,email_login'],
                 'username' => ['required', 'alpha_dash', 'max:255', 'unique:users,username'],
+                'password' => ['required', 'string', 'min:8'],
             ],
         );
         if ($validator->fails()) {
@@ -47,7 +53,7 @@ class BuatSuperAdmin extends Command
             return self::FAILURE;
         }
 
-        $hasil = DB::transaction(function () use ($email, $username, $audit): ?int {
+        $hasil = DB::transaction(function () use ($email, $username, $password, $audit): ?int {
             $role = Role::query()->where('kode', RoleKode::SuperAdmin->value)->lockForUpdate()->first();
             if ($role === null) {
                 $this->error('Role belum ada. Jalankan: php artisan db:seed --class=RoleSeeder');
@@ -65,7 +71,7 @@ class BuatSuperAdmin extends Command
             $user = new User;
             $user->username = $username;
             $user->email_login = $email;
-            $user->password_hash = Hash::make(Str::random(64)); // tidak dipakai; kredensial ada di Firebase
+            $user->password_hash = Hash::make($password);
             $user->aktif = true;
             $user->save();
 
@@ -90,9 +96,7 @@ class BuatSuperAdmin extends Command
         }
 
         $this->info("Akun SUPER_ADMIN dibuat (id {$hasil}) untuk {$email}.");
-        $this->line('Langkah berikutnya:');
-        $this->line('  1. Buat akun dengan email yang sama di Firebase Console (Authentication > Users).');
-        $this->line('  2. Buka halaman login, pilih "Lupa kata sandi", lalu atur kata sandi dari email yang masuk.');
+        $this->line('Kata sandi disimpan sebagai hash lokal. Firebase hanya digunakan untuk verifikasi email.');
 
         return self::SUCCESS;
     }

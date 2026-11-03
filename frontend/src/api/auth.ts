@@ -74,18 +74,18 @@ export async function loginWithFirebase(values: { email: string; password: strin
   return (await api.post('/api/v1/login', values)).data
 }
 
-export async function loginWithPassword(values: { login: string; password: string; totp?: string }) {
-  await api.get('/sanctum/csrf-cookie')
-  return (await api.post('/login', values)).data
-}
-
-export async function register(values: {
-  username: string
+export async function registerWithFirebase(values: {
+  nip: string
+  nama_lengkap: string
   email: string
-  password: string
-  password_confirmation: string
+  id_token: string
+  captcha_token: string
 }) {
-  const { data } = await api.post<{ data: SessionUser | BackendSession }>('/daftar', values)
+  await api.get('/sanctum/csrf-cookie')
+  const { data } = await api.post<{
+    data: SessionUser | BackendSession | LaravelSession
+    message: string
+  }>('/api/v1/daftar', values)
   return data
 }
 export async function updateProfile(values: {

@@ -217,9 +217,7 @@ class AppServiceProvider extends ServiceProvider
          * Rate Limiting - Login
          */
         RateLimiter::for('login', function (Request $request) {
-            $email = mb_strtolower(
-                (string) $request->input('email')
-            );
+            $email = mb_strtolower((string) ($request->input('email') ?? $request->input('login') ?? $request->input('nip')));
 
             return [
                 Limit::perMinute(5)->by(
@@ -230,6 +228,11 @@ class AppServiceProvider extends ServiceProvider
                     (string) $request->ip()
                 ),
             ];
+        });
+
+        RateLimiter::for('signup', function (Request $request) {
+            $nip = trim((string) $request->input('nip'));
+            return [Limit::perMinute(5)->by($nip.'|'.$request->ip()), Limit::perMinute(30)->by((string)$request->ip())];
         });
 
         /*

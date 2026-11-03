@@ -92,11 +92,12 @@ export function KelolaPegawai({ superAdmin = false }: { superAdmin?: boolean }) 
   const handleCreateSubmit = async (event: FormEvent) => {
     event.preventDefault()
     const next: Record<string, string[]> = {}
+    if (!form.nip.trim()) next.nip = ['NIP wajib diisi.']
     if (!form.nama.trim()) next.nama = ['Nama wajib diisi.']
     if (!form.email_kontak.trim()) next.email_kontak = ['Email kontak wajib diisi.']
     if (!form.jenis_kepegawaian) next.jenis_kepegawaian = ['Pilih jenis kepegawaian.']
-    if (form.nip.trim() && !/^\d{1,18}$/.test(form.nip.trim())) {
-      next.nip = ['NIP hanya boleh berisi 1 sampai 18 digit angka.']
+    if (form.nip.trim() && !/^\d{18}$/.test(form.nip.trim())) {
+      next.nip = ['NIP harus terdiri dari tepat 18 digit angka.']
     }
     if (!form.unit_id) next.unit_id = ['Pilih unit penempatan awal di wilayah satker.']
     if (!form.mulai) next.mulai = ['Tanggal mulai penempatan wajib diisi.']
@@ -139,9 +140,7 @@ export function KelolaPegawai({ superAdmin = false }: { superAdmin?: boolean }) 
       setForm(blank)
       refresh()
     } catch (error) {
-      toast.error(
-        `Pegawai berhasil dibuat, namun penempatan awal gagal: ${errorMessage(error)}. Silakan tambahkan penempatan manual agar pegawai tampil di daftar.`,
-      )
+      toast.error('Pegawai berhasil dibuat, tetapi penempatan awal belum berhasil. Silakan coba lagi.')
       setCreating(false)
       setSelected(createdPegawai)
       refresh()
@@ -181,8 +180,8 @@ export function KelolaPegawai({ superAdmin = false }: { superAdmin?: boolean }) 
     if (!form.nama.trim()) next.nama = ['Nama wajib diisi.']
     if (!form.email_kontak.trim()) next.email_kontak = ['Email kontak wajib diisi.']
     if (!form.jenis_kepegawaian) next.jenis_kepegawaian = ['Pilih jenis kepegawaian.']
-    if (form.nip.trim() && !/^\d{1,18}$/.test(form.nip.trim())) {
-      next.nip = ['NIP hanya boleh berisi 1 sampai 18 digit angka.']
+    if (form.nip.trim() && !/^\d{18}$/.test(form.nip.trim())) {
+      next.nip = ['NIP harus terdiri dari tepat 18 digit angka.']
     }
     if (Object.keys(next).length) {
       setErrors(next)
@@ -429,7 +428,7 @@ export function KelolaPegawai({ superAdmin = false }: { superAdmin?: boolean }) 
           <div className="ws-profile-form-grid">
             <Input
               id="employee-nip"
-              label="NIP (opsional, maksimal 18 digit)"
+              label="NIP (wajib, 18 digit)"
               value={form.nip}
               error={firstError(errors, 'nip')}
               maxLength={18}
@@ -542,7 +541,7 @@ export function KelolaPegawai({ superAdmin = false }: { superAdmin?: boolean }) 
               <div className="ws-profile-form-grid">
                 <Input
                   id="edit-nip"
-                  label="NIP baru (kosongkan untuk mempertahankan, maksimal 18 digit)"
+                  label="NIP baru (kosongkan untuk mempertahankan, wajib 18 digit jika diubah)"
                   value={form.nip}
                   error={firstError(errors, 'nip')}
                   maxLength={18}

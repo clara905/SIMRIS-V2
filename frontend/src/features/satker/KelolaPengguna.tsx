@@ -433,7 +433,7 @@ export function KelolaPengguna({ superAdmin = false }: { superAdmin?: boolean })
           <div className="ws-empty" role="alert">
             <strong>Daftar pengguna belum dapat dimuat</strong>
             <p>
-              {errorMessage(users.error)} Jika akses ditolak (403), pastikan sesi akun Admin Satker
+              {errorMessage(users.error)}
               Anda masih valid.
             </p>
             <button onClick={() => void users.refetch()}>Coba lagi</button>

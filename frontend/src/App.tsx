@@ -20,6 +20,9 @@ const BerandaPage = lazy(() => import('./features/beranda/BerandaPage'))
 const MonitoringPage = lazy(() => import('./features/monitoring/MonitoringPage'))
 const AsesmenPage = lazy(() => import('./features/monitoring/AsesmenPage'))
 const AuditPage = lazy(() => import('./features/audit/AuditPage'))
+const ApprovalPage = lazy(() => import('./features/approval/ApprovalPage').then(m => ({ default: m.ApprovalPage })))
+const RoleRequestPage = lazy(() => import('./features/approval/RoleRequestPage').then(m => ({ default: m.RoleRequestPage })))
+const ForgotPage = lazy(() => import('./features/auth/ForgotPage').then(m => ({ default: m.ForgotPage })))
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
 })
@@ -35,15 +38,18 @@ export default function App() {
           <Routes>
             <Route path="/masuk" element={<LoginPage />} />
             <Route path="/daftar" element={<RegisterPage />} />
+            <Route path="/lupa-kata-sandi" element={<ForgotPage />} />
             <Route path="/tanpa-akses" element={<ForbiddenPage />} />
             <Route element={<ProtectedRoute />}>
               <Route path="/ganti-password" element={<PasswordPage />} />
+              {import.meta.env.VITE_API_MOCK !== 'true' && <Route path="/pengajuan-role" element={<RoleRequestPage />} />}
               {import.meta.env.VITE_API_MOCK !== 'true' ? (
                 <Route path="*" element={<BackendWorkspace />} />
               ) : (
                 <Route element={<AppShell />}>
                   <Route index element={<BerandaPage />} />
                   <Route path="/pengguna" element={<PenggunaPage />} />
+                  <Route path="/approval-akun" element={<ApprovalPage />} />
                   <Route path="/unit" element={<UnitPage />} />
                   <Route path="/pegawai" element={<PegawaiPage />} />
                   <Route path="/metode-risiko" element={<MetodePage />} />

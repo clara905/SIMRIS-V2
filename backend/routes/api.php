@@ -5,6 +5,7 @@ use App\Http\Controllers\AsesmenController;
 use App\Http\Controllers\AsesmenWorkflowController;
 use App\Http\Controllers\AsetController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\AccountApprovalController;
 use App\Http\Controllers\AuthController as LegacyAuthController;
 use App\Http\Controllers\DokumenController;
 use App\Http\Controllers\ItemController;
@@ -28,6 +29,10 @@ Route::prefix('v1')->group(function (): void {
     Route::post('/login', [AuthController::class, 'login'])
         ->middleware('throttle:login');
 
+    Route::post('/daftar', [AuthController::class, 'register'])
+        ->middleware('throttle:signup')
+        ->name('auth.firebase-register');
+
     Route::post('/lupa-kata-sandi', [AuthController::class, 'lupaKataSandi'])
         ->middleware('throttle:lupa-kata-sandi');
 });
@@ -41,6 +46,11 @@ Route::post('/lupa-kata-sandi', [AuthController::class, 'lupaKataSandi'])
     ->name('auth.forgot-password');
 
 Route::middleware(['auth:sanctum', 'account.active'])->group(function (): void {
+    Route::get('/v1/approval-akun', [AccountApprovalController::class, 'index']);
+    Route::post('/v1/approval-akun/{id}/setujui', [AccountApprovalController::class, 'approve']);
+    Route::post('/v1/approval-akun/{id}/tolak', [AccountApprovalController::class, 'reject']);
+    Route::get('/v1/pengajuan-role', [AccountApprovalController::class, 'status']);
+    Route::post('/v1/pengajuan-role', [AccountApprovalController::class, 'submit']);
     Route::get('/me', [LegacyAuthController::class, 'me'])->name('auth.me');
     Route::put('/profil', [LegacyAuthController::class, 'updateProfile'])->name('auth.profile');
     Route::post('/logout', [LegacyAuthController::class, 'logout'])->name('auth.logout');

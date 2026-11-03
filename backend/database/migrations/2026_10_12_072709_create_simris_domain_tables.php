@@ -28,7 +28,8 @@ return new class extends Migration
 
         Schema::create('PEGAWAI', function (Blueprint $table): void {
             $table->id();
-            $table->string('nip')->nullable()->unique();
+            // Simpan sebagai string agar NIP 18 digit dan nol di awal tidak hilang.
+            $table->string('nip', 18)->nullable()->unique();
             $table->string('nama');
             $table->string('email_kontak');
             $table->string('jenis_kepegawaian');

@@ -55,7 +55,7 @@ trait MembuatPengguna
         $user->pegawai_id = $pegawai->id;
         $user->username = explode('@', $email)[0];
         $user->email_login = $email;
-        $user->password_hash = 'tidak-dipakai';
+        $user->password_hash = 'Rahasia#123';
         $user->aktif = $o['aktif'] ?? true;
         $user->save();
 

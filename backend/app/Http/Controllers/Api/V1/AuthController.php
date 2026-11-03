@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\LoginRequest;
+use App\Http\Requests\FirebaseLoginRequest;
+use App\Http\Requests\RegisterRequest;
 use App\Http\Requests\LupaKataSandiRequest;
 use App\Http\Resources\PenggunaResource;
 use App\Models\Pegawai;
@@ -29,10 +30,10 @@ class AuthController extends Controller
     ];
 
     /**
-     * Login menggunakan Firebase Authentication.
+     * Login memakai kredensial lokal; Firebase hanya memverifikasi email.
      */
     public function login(
-        LoginRequest $request,
+        FirebaseLoginRequest $request,
         LoginService $login
     ): JsonResponse {
         if (! $request->hasSession()) {
@@ -58,21 +59,30 @@ class AuthController extends Controller
     }
 
     /**
-     * Mengirim permintaan lupa kata sandi melalui Firebase.
+     * Memulihkan kata sandi lokal setelah email diverifikasi oleh Firebase.
      */
     public function lupaKataSandi(
         LupaKataSandiRequest $request,
         LoginService $login
     ): JsonResponse {
-        $login->lupaKataSandi(
-            $request->validated('email'),
-            $request->validated('captcha_token'),
-            (string) $request->ip(),
-        );
+        $login->lupaKataSandi($request->validated(), (string) $request->ip());
 
         return response()->json([
-            'message' => 'Jika email terdaftar, tautan pengaturan ulang kata sandi telah dikirim.',
+            'message' => 'Jika email terdaftar, Firebase akan mengirim tautan untuk mengatur ulang kata sandi.',
         ], 202);
+    }
+
+    public function register(RegisterRequest $request, LoginService $login): JsonResponse
+    {
+        if (! $request->hasSession()) {
+            return response()->json(['message' => 'Permintaan harus berasal dari aplikasi SIMRIS.'], 400);
+        }
+        $user = $login->daftar($request->validated(), (string) $request->ip());
+
+        return response()->json([
+            'message' => 'Email terverifikasi dan akun berhasil dibuat. Silakan masuk untuk mengajukan role.',
+            'data' => ['id' => $user->id, 'aktif' => true],
+        ], 201);
     }
 
     /**
@@ -100,7 +110,7 @@ class AuthController extends Controller
         $validated = $request->validate([
             'nama' => ['required', 'string', 'max:255'],
             'email_kontak' => ['required', 'email', 'max:255'],
-            'nip' => ['nullable', 'string', 'max:18'],
+            'nip' => ['nullable', 'string', 'regex:/^[0-9]{18}$/'],
             'jenis_kepegawaian' => ['nullable', 'string', 'max:255'],
         ]);
 

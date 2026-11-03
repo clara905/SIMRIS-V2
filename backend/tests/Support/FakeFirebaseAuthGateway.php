@@ -19,18 +19,21 @@ final class FakeFirebaseAuthGateway implements FirebaseAuthGateway
     /** @var list<string> */
     public array $resetDikirim = [];
 
+    /** @var list<string> */
+    public array $resetDikirim = [];
+
     public function tambah(string $email, string $password, bool $verified = true, bool $disabled = false): void
     {
         $this->akun[mb_strtolower($email)] = compact('password', 'verified', 'disabled');
     }
 
-    public function signInWithPassword(string $email, string $password): FirebaseIdentity
+    public function verifikasiEmail(string $idToken): FirebaseIdentity
     {
         $this->percobaan++;
-        $email = mb_strtolower($email);
+        $email = mb_strtolower(str_starts_with($idToken, 'token:') ? substr($idToken, 6) : '');
         $a = $this->akun[$email] ?? null;
 
-        if ($a === null || $a['password'] !== $password) {
+        if ($a === null) {
             throw new FirebaseAuthException(FirebaseAuthException::KREDENSIAL_SALAH);
         }
         if ($a['disabled']) {
@@ -40,8 +43,21 @@ final class FakeFirebaseAuthGateway implements FirebaseAuthGateway
         return new FirebaseIdentity('uid-'.md5($email), $email, $a['verified']);
     }
 
+    public function signInWithPassword(string $email, string $password): FirebaseIdentity
+    {
+        $this->percobaan++;
+        $email = mb_strtolower($email);
+        $account = $this->akun[$email] ?? null;
+        if (!$account || $account['password'] !== $password) throw new FirebaseAuthException(FirebaseAuthException::KREDENSIAL_SALAH);
+        if ($account['disabled']) throw new FirebaseAuthException(FirebaseAuthException::AKUN_DINONAKTIFKAN);
+        return new FirebaseIdentity('uid-'.md5($email),$email,$account['verified']);
+    }
+
     public function sendPasswordReset(string $email): void
     {
-        $this->resetDikirim[] = mb_strtolower($email);
+        $email=mb_strtolower($email);
+        if (!isset($this->akun[$email])) throw new FirebaseAuthException(FirebaseAuthException::KREDENSIAL_SALAH);
+        $this->resetDikirim[]=$email;
     }
+
 }

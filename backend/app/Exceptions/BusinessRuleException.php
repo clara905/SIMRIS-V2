@@ -8,6 +8,8 @@ class BusinessRuleException extends HttpResponseException
 {
     public function __construct(string $code, string $message, array $problems = [])
     {
-        parent::__construct(response()->json(['message' => $message, 'code' => $code, 'masalah' => $problems], 409));
+        parent::__construct(response()->json([
+            'message' => 'Permintaan tidak dapat diproses. Silakan coba lagi.',
+        ], 409));
     }
 }

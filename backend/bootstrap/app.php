@@ -49,7 +49,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 Request $request
             ) {
                 return response()->json([
-                    'message' => 'Silakan masuk terlebih dahulu.',
+                    'message' => 'Permintaan tidak dapat diproses. Silakan coba lagi.',
                 ], 401);
             }
         );
@@ -61,9 +61,22 @@ return Application::configure(basePath: dirname(__DIR__))
                 Request $request
             ) {
                 return response()->json([
-                    'message' => 'Data yang dikirim tidak valid.',
+                    'message' => 'Permintaan tidak dapat diproses. Silakan coba lagi.',
                     'errors' => $exception->errors(),
                 ], 422);
+            }
+        );
+
+        // Jangan bocorkan rincian exception atau aturan bisnis ke respons API.
+        $exceptions->render(
+            function (\Throwable $exception, Request $request) {
+                if (! $request->is('api/*') && ! $request->expectsJson()) {
+                    return null;
+                }
+
+                return response()->json([
+                    'message' => 'Permintaan tidak dapat diproses. Silakan coba lagi.',
+                ], 500);
             }
         );
     })

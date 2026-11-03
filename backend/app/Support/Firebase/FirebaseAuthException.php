@@ -14,7 +14,11 @@ final class FirebaseAuthException extends RuntimeException
     public const TERLALU_BANYAK_PERCOBAAN = 'terlalu_banyak_percobaan';
     public const LAYANAN_GAGAL = 'layanan_gagal';
 
-    public function __construct(public readonly string $alasan, ?Throwable $sebelumnya = null)
+    public function __construct(
+        public readonly string $alasan,
+        ?Throwable $sebelumnya = null,
+        public readonly ?string $kodeFirebase = null,
+    )
     {
         parent::__construct("Firebase Auth: {$alasan}", 0, $sebelumnya);
     }
