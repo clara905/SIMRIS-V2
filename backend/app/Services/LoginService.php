@@ -43,19 +43,8 @@ final class LoginService
     public function daftar(array $data, string $ip): User
     {
         $this->checkCaptcha($data['captcha_token'], $ip);
-        $nip = trim($data['nip']);
         $email = mb_strtolower(trim($data['email']));
-        if (! preg_match('/^[0-9]{18}$/', $nip)) {
-            throw ValidationException::withMessages(['nip' => 'NIP harus terdiri dari tepat 18 digit angka.']);
-        }
-        $pegawai = DB::table('PEGAWAI')->where('nip', $nip)->first();
-        if (!$pegawai) throw ValidationException::withMessages(['nip' => "NIP {$nip} belum terdaftar di sistem. Silakan minta Admin Satker Anda untuk menginput data pegawai terlebih dahulu."]);
-        if (User::query()->where('pegawai_id', $pegawai->id)->exists()) throw ValidationException::withMessages(['nip' => "NIP {$nip} sudah memiliki akun terdaftar."]);
-        if (!(bool)$pegawai->aktif) throw ValidationException::withMessages(['nip' => 'Pegawai nonaktif tidak dapat mendaftar.']);
-        $name = fn($value) => mb_strtolower(preg_replace('/\s+/u', ' ', trim((string)$value)) ?? '');
-        if ($name($pegawai->nama) !== $name($data['nama_lengkap'])) throw ValidationException::withMessages(['nama_lengkap' => 'Nama tidak sesuai dengan data pegawai.']);
-        $placement = DB::table('PENEMPATAN_PEGAWAI')->where('pegawai_id', $pegawai->id)->where('mulai', '<=', now()->toDateString())->where(fn($q) => $q->whereNull('selesai')->orWhere('selesai', '>=', now()->toDateString()))->orderByDesc('utama')->first();
-        if (!$placement) throw ValidationException::withMessages(['nip' => 'Pegawai belum memiliki penempatan aktif.']);
+        $pegawai = $this->validasiPendaftaran($data['nip'], $data['nama_lengkap']);
         try { $identity = $this->firebase->verifikasiEmail($data['id_token']); }
         catch (FirebaseAuthException $e) { Log::notice('Token verifikasi email Firebase ditolak', ['reason' => $e->alasan]); throw ValidationException::withMessages(['id_token' => 'Verifikasi email gagal atau tautan sudah kedaluwarsa.']); }
         if (!$identity->emailVerified || $identity->email !== $email) throw ValidationException::withMessages(['id_token' => 'Email belum terverifikasi atau tidak cocok dengan email pendaftaran.']);
@@ -63,10 +52,45 @@ final class LoginService
             $locked = DB::table('PEGAWAI')->where('id', $pegawai->id)->lockForUpdate()->first();
             if (User::query()->where('pegawai_id', $locked->id)->exists()) throw ValidationException::withMessages(['nip' => "NIP {$locked->nip} sudah memiliki akun terdaftar."]);
             // NIP tetap menjadi identitas pegawai di PEGAWAI.nip; username akun memakai email login.
-            $user = User::create(['pegawai_id' => $locked->id, 'username' => $email, 'email_login' => $email, 'password_hash' => bin2hex(random_bytes(32)), 'aktif' => true, 'wajib_ganti_password' => false]);
+            $user = User::create(['pegawai_id' => $locked->id, 'username' => $email, 'email_login' => $email, 'password_hash' => $data['password'], 'aktif' => true, 'wajib_ganti_password' => false]);
             $this->audit->record('USERS', $user->id, 'CREATE', null, ['pegawai_id' => $user->pegawai_id, 'email_login' => $email, 'aktif' => true]);
             return $user;
         });
+    }
+
+    public function validasiPendaftaran(string $nip, string $namaLengkap): object
+    {
+        $nip = trim($nip);
+        if (! preg_match('/^[0-9]{18}$/', $nip)) {
+            throw ValidationException::withMessages(['nip' => 'NIP harus terdiri dari tepat 18 digit angka.']);
+        }
+
+        $pegawai = DB::table('PEGAWAI')->where('nip', $nip)->first();
+        if (! $pegawai) {
+            throw ValidationException::withMessages(['nip' => 'NIP tidak ditemukan di data pegawai.']);
+        }
+        if (User::query()->where('pegawai_id', $pegawai->id)->exists()) {
+            throw ValidationException::withMessages(['nip' => 'NIP sudah memiliki akun terdaftar.']);
+        }
+        if (! $pegawai->aktif) {
+            throw ValidationException::withMessages(['nip' => 'Pegawai nonaktif tidak dapat mendaftar.']);
+        }
+
+        $normalize = fn (string $value): string => mb_strtolower(preg_replace('/\s+/u', ' ', trim($value)) ?? '');
+        if ($normalize($pegawai->nama) !== $normalize($namaLengkap)) {
+            throw ValidationException::withMessages(['nama_lengkap' => 'Nama tidak sesuai dengan data pegawai.']);
+        }
+
+        $hasActivePlacement = DB::table('PENEMPATAN_PEGAWAI')
+            ->where('pegawai_id', $pegawai->id)
+            ->where('mulai', '<=', today())
+            ->where(fn ($query) => $query->whereNull('selesai')->orWhere('selesai', '>=', today()))
+            ->exists();
+        if (! $hasActivePlacement) {
+            throw ValidationException::withMessages(['nip' => 'Pegawai belum memiliki penempatan aktif.']);
+        }
+
+        return $pegawai;
     }
 
     public function lupaKataSandi(array $data, string $ip): void

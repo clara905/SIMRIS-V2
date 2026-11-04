@@ -23,6 +23,13 @@ final class RestFirebaseAuthGateway implements FirebaseAuthGateway
         return $this->verifikasiEmail((string)$login['idToken']);
     }
 
+    public function changePassword(string $email, string $currentPassword, string $newPassword): void
+    {
+        $login = $this->post('accounts:signInWithPassword', ['email'=>$email,'password'=>$currentPassword,'returnSecureToken'=>true]);
+        if (empty($login['idToken'])) throw new FirebaseAuthException(FirebaseAuthException::LAYANAN_GAGAL);
+        $this->post('accounts:update', ['idToken'=>$login['idToken'],'password'=>$newPassword,'returnSecureToken'=>true]);
+    }
+
     public function verifikasiEmail(string $idToken): FirebaseIdentity
     {
         $result = $this->post('accounts:lookup', ['idToken' => $idToken]);

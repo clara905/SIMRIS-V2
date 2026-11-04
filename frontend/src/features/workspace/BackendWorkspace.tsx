@@ -120,6 +120,7 @@ export function BackendWorkspace() {
   const [mobile, setMobile] = useState(false)
   const [leaving, setLeaving] = useState(false)
   const [logoutConfirm, setLogoutConfirm] = useState(false)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [navSearch, setNavSearch] = useState('')
   const roleCodes = session.data?.roleCodes ?? []
   const pendingApproval = useQuery({ queryKey: ['approval-akun-count'], queryFn: async () => (await api.get<{ data: unknown[] }>('/api/v1/approval-akun')).data.data.length, enabled: roleCodes.includes('ADMIN_SATKER'), refetchInterval: 10_000, retry: false })
@@ -144,7 +145,6 @@ export function BackendWorkspace() {
             <NavLink to={m.path} end onClick={() => setMobile(false)}>
               <m.icon size={18} />
               <span>{m.label}</span>
-              {m.path === '/approval-akun' && Boolean(pendingApproval.data) && <span className="ws-badge warning">{pendingApproval.data}</span>}
               {m.path === location.pathname && <span className="ws-active-dot" />}
             </NavLink>
           </div>
@@ -232,13 +232,33 @@ export function BackendWorkspace() {
             )}
           </div>
           <div className="ws-header-actions">
-            <button
-              aria-label="Notifikasi"
-              title="Notifikasi"
-              onClick={() => toast.info('Belum ada notifikasi baru.')}
-            >
-              <Bell size={17} />
-            </button>
+            <Dialog.Root open={notificationsOpen} onOpenChange={setNotificationsOpen}>
+              <Dialog.Trigger className="ws-icon-button" aria-label="Notifikasi" title="Notifikasi">
+                <Bell size={17} />
+                {Boolean(pendingApproval.data) && <span className="ws-notification-count">{pendingApproval.data}</span>}
+              </Dialog.Trigger>
+              <Dialog.Portal>
+                <Dialog.Overlay className="ws-notification-overlay" />
+                <Dialog.Content className="ws-notification-panel" aria-describedby="notification-description">
+                  <Dialog.Title>Notifikasi</Dialog.Title>
+                  <Dialog.Description id="notification-description">Pemberitahuan yang perlu Anda tindak lanjuti.</Dialog.Description>
+                  {pendingApproval.isLoading ? (
+                    <p role="status">Memuat notifikasi…</p>
+                  ) : pendingApproval.isError ? (
+                    <p role="alert">Notifikasi belum dapat dimuat.</p>
+                  ) : pendingApproval.data ? (
+                    <Link to="/approval-akun" onClick={() => setNotificationsOpen(false)} className="ws-notification-item">
+                      <UserCheck size={18} />
+                      <span><strong>Pengajuan akun menunggu persetujuan</strong><small>{pendingApproval.data} pengajuan perlu ditinjau.</small></span>
+                      <ArrowRight size={16} />
+                    </Link>
+                  ) : (
+                    <p className="ws-notification-empty">Tidak ada notifikasi baru.</p>
+                  )}
+                  <Dialog.Close className="ws-notification-close">Tutup</Dialog.Close>
+                </Dialog.Content>
+              </Dialog.Portal>
+            </Dialog.Root>
             <button
               aria-label="Keluar"
               disabled={leaving}

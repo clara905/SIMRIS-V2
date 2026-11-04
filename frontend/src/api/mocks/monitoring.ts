@@ -59,7 +59,25 @@ for (const [index, jenis] of ['soa', 'sop', 'dokumen', 'lampiran'].entries()) {
 }
 export const monitoringHandlers = [
   http.get('/api/monitoring', () => authorized() || HttpResponse.json({ data: records })),
-  http.get('/api/audit', () => authorized() || HttpResponse.json({ data: readDb().audit })),
+  http.get('/api/log-audit', ({ request }) => {
+    const denied = authorized()
+    if (denied) return denied
+    const url = new URL(request.url)
+    const page = Math.max(1, Number(url.searchParams.get('page') || 1))
+    const perPage = Math.min(100, Math.max(1, Number(url.searchParams.get('per_page') || 20)))
+    const rows = readDb().audit
+      .filter((row) => !url.searchParams.get('filter[user_id]') || String(row.user_id) === url.searchParams.get('filter[user_id]'))
+      .filter((row) => !url.searchParams.get('filter[entitas]') || row.entitas === url.searchParams.get('filter[entitas]'))
+    const start = (page - 1) * perPage
+    return HttpResponse.json({
+      data: rows.slice(start, start + perPage).map((row) => ({
+        ...row,
+        user_id: row.user_id ?? null,
+        entitas_id: row.entitas_id ?? row.id,
+      })),
+      meta: { current_page: page, last_page: Math.max(1, Math.ceil(rows.length / perPage)), total: rows.length },
+    })
+  }),
   http.post('/api/monitoring/*', () =>
     HttpResponse.json(
       { message: 'Hanya lihat. Super admin tidak mengubah data transaksi.' },

@@ -103,7 +103,7 @@ export function ApprovalPage() {
                 </div>
                 <span className={styles.pending}><i /> Menunggu</span>
               </div>
-              <div className={styles.unit}><Building2 size={16} /><span>Penempatan</span><strong>{row.unit_nama}</strong></div>
+              <div className={styles.unit}><Building2 size={16} /><span>Unit tujuan</span><strong>{row.unit_nama}</strong></div>
               <div className={styles.unit}><ShieldCheck size={16} /><span>Role diajukan</span><strong>{roleOptions.find((role) => role.value === row.role_kode)?.label ?? row.role_kode}</strong></div>
               <p>{row.informasi_pendukung}</p>
               <div className={styles.cardBottom}>

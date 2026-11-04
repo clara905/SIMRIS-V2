@@ -12,6 +12,9 @@ interface FirebaseAuthGateway
     /** Authenticate with the password stored by Firebase. */
     public function signInWithPassword(string $email, string $password): FirebaseIdentity;
 
+    /** Verify the current password, then replace it in Firebase. */
+    public function changePassword(string $email, string $currentPassword, string $newPassword): void;
+
     /** Verify a Firebase ID token and return its verified email identity. */
     public function verifikasiEmail(string $idToken): FirebaseIdentity;
 

@@ -33,6 +33,9 @@ Route::prefix('v1')->group(function (): void {
         ->middleware('throttle:signup')
         ->name('auth.firebase-register');
 
+    Route::post('/validasi-pendaftaran', [AuthController::class, 'preflightRegister'])
+        ->middleware('throttle:signup');
+
     Route::post('/lupa-kata-sandi', [AuthController::class, 'lupaKataSandi'])
         ->middleware('throttle:lupa-kata-sandi');
 });
@@ -50,6 +53,7 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function (): void {
     Route::post('/v1/approval-akun/{id}/setujui', [AccountApprovalController::class, 'approve']);
     Route::post('/v1/approval-akun/{id}/tolak', [AccountApprovalController::class, 'reject']);
     Route::get('/v1/pengajuan-role', [AccountApprovalController::class, 'status']);
+    Route::get('/v1/unit-pilihan-role', [AccountApprovalController::class, 'unitOptions']);
     Route::post('/v1/pengajuan-role', [AccountApprovalController::class, 'submit']);
     Route::get('/me', [LegacyAuthController::class, 'me'])->name('auth.me');
     Route::put('/profil', [LegacyAuthController::class, 'updateProfile'])->name('auth.profile');

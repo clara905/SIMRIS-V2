@@ -450,7 +450,6 @@ export function KelolaPengguna({ superAdmin = false }: { superAdmin?: boolean })
               <table className="ws-table">
                 <thead>
                   <tr>
-                    <th>Username</th>
                     <th>Email</th>
                     <th>Pegawai</th>
                     <th>Penempatan aktif</th>
@@ -465,9 +464,6 @@ export function KelolaPengguna({ superAdmin = false }: { superAdmin?: boolean })
                     const active = row.aktif === true || row.aktif === 1
                     return (
                       <tr key={row.id}>
-                        <td>
-                          <strong>{str(row.username)}</strong>
-                        </td>
                         <td>{str(row.email_login)}</td>
                         <td>
                           {employees.data?.find(

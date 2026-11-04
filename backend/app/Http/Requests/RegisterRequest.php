@@ -13,6 +13,7 @@ class RegisterRequest extends ApiRequest
             'nama_lengkap' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email:rfc', 'max:255', 'unique:USERS,email_login'],
             'id_token' => ['required', 'string', 'max:8192'],
+            'password' => ['required', 'string', 'min:12', 'max:255'],
             'captcha_token' => ['required', 'string', 'max:4096'],
         ];
     }

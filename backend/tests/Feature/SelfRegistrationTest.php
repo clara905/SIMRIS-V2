@@ -38,4 +38,35 @@ class SelfRegistrationTest extends TestCase
         $this->assertDatabaseCount('USER_ROLE_SCOPE',0);
         $this->assertDatabaseHas('LOG_AUDIT',['entitas'=>'USERS','entitas_id'=>$user->id,'aksi'=>'CREATE']);
     }
+
+    public function test_role_request_records_selected_field_and_displays_it_in_status(): void
+    {
+        $satker = UnitOrganisasi::forceCreate(['parent_id' => null, 'kode' => 'SAT-ROLE', 'nama' => 'Satker Role', 'jenis' => 'SATKER', 'aktif' => true]);
+        $bidang = UnitOrganisasi::forceCreate(['parent_id' => $satker->id, 'kode' => 'BID-ROLE', 'nama' => 'Bidang Tujuan', 'jenis' => 'BIDANG', 'aktif' => true]);
+        $subbidang = UnitOrganisasi::forceCreate(['parent_id' => $bidang->id, 'kode' => 'SUB-ROLE', 'nama' => 'Subbidang Tujuan', 'jenis' => 'SUBBIDANG', 'aktif' => true]);
+        $pegawai = Pegawai::forceCreate(['nip' => '123456789012345678', 'nama' => 'Pemohon Role', 'email_kontak' => 'pemohon@example.test', 'jenis_kepegawaian' => 'PNS', 'aktif' => true]);
+        PenempatanPegawai::forceCreate(['pegawai_id' => $pegawai->id, 'unit_id' => $satker->id, 'mulai' => today()->toDateString(), 'selesai' => null, 'utama' => true]);
+        $user = User::factory()->create(['pegawai_id' => $pegawai->id]);
+
+        $this->actingAs($user)->getJson('/api/v1/unit-pilihan-role?role=KABID')->assertOk()->assertJsonPath('data.0.id', $bidang->id);
+        $this->getJson('/api/v1/unit-pilihan-role?role=KASATKER')->assertOk()->assertJsonPath('data.0.id', $satker->id);
+        $this->getJson('/api/v1/unit-pilihan-role?role=KASUB')->assertOk()->assertJsonPath('data.0.id', $subbidang->id);
+        $this->actingAs($user)->postJson('/api/v1/pengajuan-role', [
+            'role_kode' => 'STAFF',
+            'informasi_pendukung' => 'Saya akan bertugas pada bidang ini.',
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('PENGAJUAN_ROLE', ['user_id' => $user->id, 'unit_id' => $satker->id]);
+        $this->getJson('/api/v1/pengajuan-role')->assertOk()->assertJsonPath('data.pengajuan.unit_nama', 'Satker Role');
+
+        $secondPegawai = Pegawai::forceCreate(['nip' => '987654321098765432', 'nama' => 'Pemohon Kasub', 'email_kontak' => 'kasub@example.test', 'jenis_kepegawaian' => 'PNS', 'aktif' => true]);
+        PenempatanPegawai::forceCreate(['pegawai_id' => $secondPegawai->id, 'unit_id' => $satker->id, 'mulai' => today()->toDateString(), 'selesai' => null, 'utama' => true]);
+        $kasubUser = User::factory()->create(['pegawai_id' => $secondPegawai->id]);
+        $this->actingAs($kasubUser)->postJson('/api/v1/pengajuan-role', [
+            'role_kode' => 'KASUB',
+            'unit_id' => $subbidang->id,
+            'informasi_pendukung' => 'Saya akan memimpin subbidang ini.',
+        ])->assertCreated();
+        $this->assertDatabaseHas('PENGAJUAN_ROLE', ['user_id' => $kasubUser->id, 'unit_id' => $subbidang->id]);
+    }
 }

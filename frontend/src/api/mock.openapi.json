@@ -1843,6 +1843,12 @@
           "id": {
             "type": "integer"
           },
+          "user_id": {
+            "type": ["integer", "null"]
+          },
+          "entitas_id": {
+            "type": "integer"
+          },
           "nama": {
             "type": "string"
           },
@@ -2333,6 +2339,12 @@
         ],
         "properties": {
           "id": {
+            "type": "integer"
+          },
+          "user_id": {
+            "type": ["integer", "null"]
+          },
+          "entitas_id": {
             "type": "integer"
           },
           "waktu": {

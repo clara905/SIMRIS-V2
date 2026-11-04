@@ -25,6 +25,7 @@ class MeResource extends JsonResource
             'pegawai' => $pegawai,
             'roles' => app(ScopeUnit::class)->roles($this->resource)->map(fn ($role) => ['id' => $role->id, 'role_id' => $role->role_id, 'kode' => $role->kode, 'nama' => $role->nama, 'unit_id' => $role->unit_id, 'mulai' => Carbon::parse($role->mulai)->toIso8601String(), 'selesai' => $role->selesai ? Carbon::parse($role->selesai)->toIso8601String() : null]),
             'jalur_unit' => $this->pegawai_id ? DB::table('v_pegawai_unit')->where('pegawai_id', $this->pegawai_id)->first() : null,
+            'unit_id' => $this->pegawai_id ? DB::table('PENEMPATAN_PEGAWAI')->where('pegawai_id', $this->pegawai_id)->where('utama', true)->where('mulai', '<=', today())->where(fn ($q) => $q->whereNull('selesai')->orWhere('selesai', '>=', today()))->value('unit_id') : null,
         ];
     }
 }

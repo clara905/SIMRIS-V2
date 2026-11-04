@@ -25,9 +25,11 @@ class AccountApprovalController extends Controller
             ->where(fn ($q) => $q->whereNull('s.selesai')->orWhere('s.selesai', '>=', now()))
             ->exists();
 
-        $submission = DB::table('PENGAJUAN_ROLE')
-            ->where('user_id', $request->user()->id)
-            ->orderByDesc('id')
+        $submission = DB::table('PENGAJUAN_ROLE as a')
+            ->leftJoin('UNIT_ORGANISASI as un', 'un.id', '=', 'a.unit_id')
+            ->where('a.user_id', $request->user()->id)
+            ->orderByDesc('a.id')
+            ->select('a.*', 'un.nama as unit_nama')
             ->first();
 
         return response()->json(['data' => [
@@ -36,10 +38,40 @@ class AccountApprovalController extends Controller
         ]]);
     }
 
+    public function unitOptions(Request $request)
+    {
+        $role = $request->query('role');
+        $employeeId = $request->user()->pegawai_id;
+        $placement = $employeeId ? DB::table('PENEMPATAN_PEGAWAI')
+            ->where('pegawai_id', $employeeId)
+            ->where('utama', true)
+            ->where('mulai', '<=', today())
+            ->where(fn ($q) => $q->whereNull('selesai')->orWhere('selesai', '>=', today()))
+            ->first() : null;
+        $units = collect();
+        if ($placement && $role === 'KASATKER') {
+            $units = DB::table('UNIT_ORGANISASI')->where('id', $placement->unit_id)->where('jenis', 'SATKER')->where('aktif', true)->get(['id', 'nama', 'jenis', 'parent_id', 'kode']);
+        } elseif ($placement && $role === 'KABID') {
+            $units = DB::table('UNIT_ORGANISASI')->where('parent_id', $placement->unit_id)->where('jenis', 'BIDANG')->where('aktif', true)->orderBy('kode')->get(['id', 'nama', 'jenis', 'parent_id', 'kode']);
+        } elseif ($placement && $role === 'KASUB') {
+            $units = DB::table('UNIT_ORGANISASI as sub')
+                ->join('UNIT_ORGANISASI as bidang', 'bidang.id', '=', 'sub.parent_id')
+                ->where('bidang.parent_id', $placement->unit_id)
+                ->where('sub.jenis', 'SUBBIDANG')->where('sub.aktif', true)
+                ->orderBy('sub.kode')
+                ->get(['sub.id', 'sub.nama', 'sub.jenis', 'sub.parent_id', 'sub.kode']);
+        } elseif ($placement && $role === 'STAFF') {
+            $units = DB::table('UNIT_ORGANISASI')->where('id', $placement->unit_id)->get(['id', 'nama', 'jenis', 'parent_id', 'kode']);
+        }
+
+        return response()->json(['data' => $units]);
+    }
+
     public function submit(Request $request, AuditService $audit)
     {
         $data = $request->validate([
             'role_kode' => ['required', Rule::in(self::ROLE_DIAJUKAN)],
+            'unit_id' => ['required', 'integer', Rule::exists('UNIT_ORGANISASI', 'id')],
             'informasi_pendukung' => ['required', 'string', 'min:10', 'max:3000'],
         ]);
 
@@ -59,6 +91,34 @@ class AccountApprovalController extends Controller
             ->first();
         if (! $placement) {
             throw ValidationException::withMessages(['pegawai' => 'Pegawai belum memiliki penempatan utama yang aktif.']);
+        }
+        $selectedUnit = DB::table('UNIT_ORGANISASI')->where('id', $data['unit_id'])->first();
+        $expectedKind = match ($data['role_kode']) {
+            'KASATKER' => 'SATKER',
+            'KABID' => 'BIDANG',
+            'KASUB' => 'SUBBIDANG',
+            default => null,
+        };
+        if ($expectedKind !== null && (! $selectedUnit || $selectedUnit->jenis !== $expectedKind)) {
+            throw ValidationException::withMessages(['unit_id' => 'Unit yang dipilih tidak sesuai dengan role yang diajukan.']);
+        }
+        if ($expectedKind === null) {
+            $data['unit_id'] = $placement->unit_id;
+        }
+        if ($expectedKind === 'BIDANG' && (int) $selectedUnit->parent_id !== (int) $placement->unit_id) {
+            throw ValidationException::withMessages(['unit_id' => 'Bidang harus berada di bawah Satker penempatan aktif Anda.']);
+        }
+        if ($expectedKind === 'SUBBIDANG') {
+            $parent = DB::table('UNIT_ORGANISASI')->where('id', $selectedUnit->parent_id)->first();
+            $satkerId = $parent && $parent->jenis === 'SATKER'
+                ? $parent->id
+                : ($parent ? DB::table('UNIT_ORGANISASI')->where('id', $parent->parent_id)->where('jenis', 'SATKER')->value('id') : null);
+            if (! $satkerId || (int) $satkerId !== (int) $placement->unit_id) {
+                throw ValidationException::withMessages(['unit_id' => 'Subbidang harus berada di bawah Satker penempatan aktif Anda.']);
+            }
+        }
+        if ($expectedKind === 'SATKER' && (int) $selectedUnit->id !== (int) $placement->unit_id) {
+            throw ValidationException::withMessages(['unit_id' => 'Satker yang dipilih harus sesuai dengan penempatan aktif Anda.']);
         }
 
         $hasRole = DB::table('USER_ROLE_SCOPE')
@@ -80,7 +140,7 @@ class AccountApprovalController extends Controller
 
         $id = DB::table('PENGAJUAN_ROLE')->insertGetId([
             'user_id' => $user->id,
-            'unit_id' => $placement->unit_id,
+            'unit_id' => $data['unit_id'],
             'role_kode' => $data['role_kode'],
             'informasi_pendukung' => trim($data['informasi_pendukung']),
             'status' => 'MENUNGGU',
@@ -89,7 +149,7 @@ class AccountApprovalController extends Controller
         ]);
         $audit->record('PENGAJUAN_ROLE', $id, 'CREATE', null, [
             'user_id' => $user->id,
-            'unit_id' => $placement->unit_id,
+            'unit_id' => $data['unit_id'],
             'role_kode' => $data['role_kode'],
         ]);
 

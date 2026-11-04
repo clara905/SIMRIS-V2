@@ -212,6 +212,96 @@
   min-width: 36px;
   padding: 5px;
 }
+.ws-header-actions .ws-icon-button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 36px;
+  cursor: pointer;
+  color: #344054;
+}
+.ws-notification-count {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #b42336;
+  color: #fff;
+  font-size: 10px;
+  line-height: 17px;
+  text-align: center;
+}
+.ws-notification-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: #15203040;
+}
+.ws-notification-panel {
+  position: fixed;
+  z-index: 91;
+  top: 68px;
+  right: 22px;
+  width: min(390px, calc(100vw - 24px));
+  padding: 20px;
+  border: 1px solid #e3e7ed;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 16px 48px #15203024;
+}
+.ws-notification-panel h2 {
+  margin: 0;
+  color: #1e293b;
+  font-size: 17px;
+}
+.ws-notification-panel > p {
+  margin: 16px 0;
+  color: #64748b;
+  font-size: 13px;
+}
+.ws-notification-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-top: 16px;
+  padding: 13px;
+  border-radius: 9px;
+  background: #f8fafc;
+  color: #344054;
+  text-decoration: none;
+}
+.ws-notification-item > span {
+  flex: 1;
+}
+.ws-notification-item strong,
+.ws-notification-item small {
+  display: block;
+}
+.ws-notification-item strong {
+  font-size: 13px;
+}
+.ws-notification-item small {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 12px;
+}
+.ws-notification-empty {
+  padding: 18px 0;
+  text-align: center;
+}
+.ws-notification-close {
+  display: block;
+  margin: 16px 0 0 auto;
+  padding: 7px 12px;
+  border: 1px solid #d0d5dd;
+  border-radius: 7px;
+  background: white;
+  color: #344054;
+  cursor: pointer;
+}
 .ws-content {
   padding: 32px 36px 0;
   max-width: 1720px;

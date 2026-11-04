@@ -20,10 +20,16 @@ export default function AuditPage() {
   const [action, setAction] = useState('')
   const [date, setDate] = useState('')
   const [selected, setSelected] = useState<number | null>(Number(params.get('id')) || null)
+  const searchTerm = search.trim().toLocaleLowerCase('id-ID')
+  const userIdSearch = /^\d+$/.test(search.trim()) ? search.trim() : null
   const record = query.data?.find((a) => a.id === selected)
   const data = (query.data || []).filter(
     (a) =>
-      `${a.nama} ${a.pelaku}`.toLowerCase().includes(search.toLowerCase()) &&
+      (!searchTerm ||
+        `${a.nama} ${a.pelaku}`
+          .toLocaleLowerCase('id-ID')
+          .includes(searchTerm) ||
+        (userIdSearch !== null && String(a.user_id ?? '') === userIdSearch)) &&
       (!entity || a.entitas.toLowerCase() === entity.toLowerCase()) &&
       (!action || a.aksi === action) &&
       (!date ||
@@ -36,7 +42,7 @@ export default function AuditPage() {
         title="Log audit"
         description="Telusuri siapa mengubah apa, kapan, dan bagaimana data berubah."
       />
-      <FilterBar value={search} onChange={setSearch} placeholder="Cari pelaku atau nama data…">
+      <FilterBar value={search} onChange={setSearch} placeholder="Cari user ID atau nama pelaku">
         <select
           aria-label="Filter entitas"
           value={entity}
@@ -83,6 +89,7 @@ export default function AuditPage() {
               render: (a) => `${tanggal(a.waktu)}, ${waktu(a.waktu)}`,
             },
             { key: 'pelaku', label: 'Pelaku' },
+            { key: 'user_id', label: 'User ID' },
             { key: 'aksi', label: 'Aksi' },
             { key: 'entitas', label: 'Entitas' },
           ]}

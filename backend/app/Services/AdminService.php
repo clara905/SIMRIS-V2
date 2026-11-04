@@ -8,9 +8,9 @@ use App\Models\PenempatanPegawai;
 use App\Models\PeriodePenilaian;
 use App\Models\RencanaKerja;
 use App\Models\Role;
-use App\Models\UnitOrganisasi;
 use App\Models\User;
 use App\Models\UserRoleScope;
+use App\Models\UnitOrganisasi;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -160,16 +160,42 @@ class AdminService
                 }
                 if ($resource === 'penempatan-pegawai' && ! $this->scope->isSuper($actor)) {
                     $satkerUnits = $this->scope->idsForRoles($actor, ['ADMIN_SATKER']);
+                    $units = UnitOrganisasi::query()->get(['id', 'parent_id']);
+                    $manageableUnitIds = $satkerUnits;
+                    do {
+                        $previousCount = count($manageableUnitIds);
+                        foreach ($units as $unit) {
+                            if ($unit->parent_id !== null && in_array((int) $unit->parent_id, $manageableUnitIds, true) && ! in_array((int) $unit->id, $manageableUnitIds, true)) {
+                                $manageableUnitIds[] = (int) $unit->id;
+                            }
+                        }
+                    } while ($previousCount !== count($manageableUnitIds));
                     $targetUnitId = isset($data['unit_id']) ? (int) $data['unit_id'] : ($model->exists ? (int) $model->unit_id : null);
-                    if ($targetUnitId === null || ! in_array($targetUnitId, $satkerUnits, true)) {
+                    if ($targetUnitId === null || ! in_array($targetUnitId, $manageableUnitIds, true)) {
                         throw new BusinessRuleException('unit_di_luar_scope', 'Penempatan hanya boleh berada di wilayah Admin Satker.');
                     }
-                    if ($model->exists && ! in_array((int) $model->unit_id, $satkerUnits, true)) {
+                    if ($model->exists && ! in_array((int) $model->unit_id, $manageableUnitIds, true)) {
                         throw new BusinessRuleException('unit_di_luar_scope', 'Penempatan yang diubah harus berada di wilayah Admin Satker.');
                     }
                     $targetPegawaiId = (int) ($data['pegawai_id'] ?? $model->pegawai_id);
+                    $activePlacementInOtherSatker = DB::table('PENEMPATAN_PEGAWAI')
+                        ->where('pegawai_id', $targetPegawaiId)
+                        ->where('utama', true)
+                        ->where('mulai', '<=', today())
+                        ->where(fn ($q) => $q->whereNull('selesai')->orWhere('selesai', '>=', today()))
+                        ->exists();
+                    if ($activePlacementInOtherSatker && ! DB::table('PENEMPATAN_PEGAWAI')
+                        ->where('pegawai_id', $targetPegawaiId)
+                        ->whereIn('unit_id', $satkerUnits)
+                        ->where('utama', true)
+                        ->where('mulai', '<=', today())
+                        ->where(fn ($q) => $q->whereNull('selesai')->orWhere('selesai', '>=', today()))
+                        ->exists()) {
+                        throw new BusinessRuleException('mutasi_lintas_satker_dilarang', 'Mutasi pegawai antar satker hanya dapat dikerjakan oleh Super Admin.');
+                    }
                     $activePlacementOutside = DB::table('PENEMPATAN_PEGAWAI')
                         ->where('pegawai_id', $targetPegawaiId)
+                        ->when($model->exists, fn ($q) => $q->where('id', '!=', $model->id))
                         ->whereNotIn('unit_id', $satkerUnits)
                         ->where('mulai', '<=', today())
                         ->where(fn ($q) => $q->whereNull('selesai')->orWhere('selesai', '>=', today()))

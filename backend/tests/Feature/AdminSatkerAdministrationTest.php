@@ -363,6 +363,15 @@ test('admin satker cannot place employee outside scope and cannot mutate employe
         'unit_id' => $root->id,
         'selesai' => today()->toDateString(),
     ]);
+    $nextChild = UnitOrganisasi::factory()->create(['jenis' => 'BIDANG', 'parent_id' => $root->id]);
+    $secondMove = satkerAdminSession($admin)->postJson('/api/penempatan-pegawai', [
+        'pegawai_id' => $localPegawai->id,
+        'unit_id' => $nextChild->id,
+        'mulai' => today()->addDays(2)->toDateString(),
+    ])->assertCreated()->json('data');
+    satkerAdminSession($admin)->patchJson('/api/penempatan-pegawai/'.$secondMove['id'], [
+        'unit_id' => $sub->id,
+    ])->assertOk()->assertJsonPath('data.unit_id', $sub->id);
     satkerAdminSession($admin)->postJson('/api/penempatan-pegawai', [
         'pegawai_id' => $localPegawai->id,
         'unit_id' => $sub->id,

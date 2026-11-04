@@ -246,6 +246,9 @@ export function KelolaPegawai({ superAdmin = false }: { superAdmin?: boolean }) 
       mulai: todayStr(),
       utama: true,
     })
+    // NIP tersimpan disamarkan oleh server. Isi field hanya jika sebelumnya
+    // sudah diungkapkan setelah password dikonfirmasi.
+    setForm((current) => ({ ...current, nip: revealedNips[row.id] ?? '' }))
   }
 
   const close = () => {

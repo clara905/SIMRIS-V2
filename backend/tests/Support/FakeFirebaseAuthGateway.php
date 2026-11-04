@@ -19,9 +19,6 @@ final class FakeFirebaseAuthGateway implements FirebaseAuthGateway
     /** @var list<string> */
     public array $resetDikirim = [];
 
-    /** @var list<string> */
-    public array $resetDikirim = [];
-
     public function tambah(string $email, string $password, bool $verified = true, bool $disabled = false): void
     {
         $this->akun[mb_strtolower($email)] = compact('password', 'verified', 'disabled');
@@ -58,6 +55,14 @@ final class FakeFirebaseAuthGateway implements FirebaseAuthGateway
         $email=mb_strtolower($email);
         if (!isset($this->akun[$email])) throw new FirebaseAuthException(FirebaseAuthException::KREDENSIAL_SALAH);
         $this->resetDikirim[]=$email;
+    }
+
+    public function changePassword(string $email, string $currentPassword, string $newPassword): void
+    {
+        $email = mb_strtolower($email);
+        $account = $this->akun[$email] ?? null;
+        if (!$account || $account['password'] !== $currentPassword) throw new FirebaseAuthException(FirebaseAuthException::KREDENSIAL_SALAH);
+        $this->akun[$email]['password'] = $newPassword;
     }
 
 }

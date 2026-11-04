@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\FirebaseLoginRequest;
+use App\Http\Requests\PreflightRegisterRequest;
 use App\Http\Requests\RegisterRequest;
 use App\Http\Requests\LupaKataSandiRequest;
 use App\Http\Resources\PenggunaResource;
@@ -83,6 +84,16 @@ class AuthController extends Controller
             'message' => 'Email terverifikasi dan akun berhasil dibuat. Silakan masuk untuk mengajukan role.',
             'data' => ['id' => $user->id, 'aktif' => true],
         ], 201);
+    }
+
+    public function preflightRegister(PreflightRegisterRequest $request, LoginService $login): JsonResponse
+    {
+        $login->validasiPendaftaran(
+            $request->validated('nip'),
+            $request->validated('nama_lengkap'),
+        );
+
+        return response()->json(['message' => 'Data pegawai valid untuk pendaftaran.']);
     }
 
     /**

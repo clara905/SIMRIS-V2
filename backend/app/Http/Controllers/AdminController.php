@@ -8,6 +8,8 @@ use App\Http\Resources\AdminResource;
 use App\Models\UnitOrganisasi;
 use App\Services\AdminService;
 use App\Services\HierarkiService;
+use App\Contracts\FirebaseAuthGateway;
+use App\Support\Firebase\FirebaseAuthException;
 use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
@@ -16,7 +18,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
 class AdminController extends Controller
@@ -143,7 +144,12 @@ class AdminController extends Controller
     #[Response(status: 404, description: 'Pegawai tidak ditemukan atau berada di luar scope.', type: 'array{message: string}')]
     public function revealNip(AdminRequest $request): JsonResponse
     {
-        if (! Hash::check($request->validated('password'), $request->user()->password_hash)) {
+        try {
+            app(FirebaseAuthGateway::class)->signInWithPassword($request->user()->email_login, (string) $request->validated('password'));
+        } catch (FirebaseAuthException $exception) {
+            if ($exception->alasan !== FirebaseAuthException::KREDENSIAL_SALAH) {
+                return response()->json(['message' => 'Layanan autentikasi sedang bermasalah.'], 503);
+            }
             throw ValidationException::withMessages(['password' => ['Password tidak sesuai.']]);
         }
         $pegawai = $this->service->query('pegawai', $request->user())

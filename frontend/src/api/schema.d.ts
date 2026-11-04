@@ -1754,6 +1754,8 @@ export interface components {
         };
         Audit: {
             id: number;
+            user_id: number | null;
+            entitas_id: number;
             waktu: string;
             pelaku: string;
             aksi: string;

@@ -15,7 +15,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
@@ -97,7 +96,7 @@ class AuthController extends Controller
         $validated = $request->validate([
             'username'              => ['required', 'string', 'max:255', 'unique:users,username'],
             'email'                 => ['required', 'string', 'email', 'max:255', 'unique:users,email_login'],
-            'password'              => ['required', 'string', 'min:8', 'max:255'],
+            'password'              => ['required', 'string', 'min:12', 'max:255'],
             'password_confirmation' => ['required', 'same:password'],
         ]);
 
@@ -190,11 +189,17 @@ class AuthController extends Controller
      */
     public function password(PasswordRequest $request, AuditService $audit): JsonResponse
     {
-        $user = DB::transaction(function () use ($request, $audit): User {
-            $user = User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
-            if (! Hash::check($request->input('current_password'), $user->password_hash)) {
+        $user = $request->user();
+        try {
+            app(\App\Contracts\FirebaseAuthGateway::class)->changePassword($user->email_login, (string) $request->input('current_password'), (string) $request->input('password'));
+        } catch (\App\Support\Firebase\FirebaseAuthException $exception) {
+            if ($exception->alasan === \App\Support\Firebase\FirebaseAuthException::KREDENSIAL_SALAH) {
                 throw ValidationException::withMessages(['current_password' => ['Password saat ini tidak sesuai.']]);
             }
+            throw ValidationException::withMessages(['password' => ['Password Firebase tidak dapat diperbarui. Coba lagi nanti.']]);
+        }
+        $user = DB::transaction(function () use ($request, $audit): User {
+            $user = User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
             $user->update(['password_hash' => $request->input('password'), 'wajib_ganti_password' => false]);
             $audit->record('USERS', $user->id, 'PASSWORD_CHANGE');
 
@@ -216,7 +221,12 @@ class AuthController extends Controller
      */
     public function confirm(ConfirmPasswordRequest $request): JsonResponse
     {
-        if (! Hash::check($request->input('password'), $request->user()->password_hash)) {
+        try {
+            app(\App\Contracts\FirebaseAuthGateway::class)->signInWithPassword($request->user()->email_login, (string) $request->input('password'));
+        } catch (\App\Support\Firebase\FirebaseAuthException $exception) {
+            if ($exception->alasan !== \App\Support\Firebase\FirebaseAuthException::KREDENSIAL_SALAH) {
+                return response()->json(['message' => 'Layanan autentikasi sedang bermasalah.'], 503);
+            }
             throw ValidationException::withMessages(['password' => ['Password tidak sesuai.']]);
         }
         $request->session()->put('auth.password_confirmed_at', now()->timestamp);

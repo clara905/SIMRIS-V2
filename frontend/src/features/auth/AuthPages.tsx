@@ -254,7 +254,7 @@ const registerSchema = z
     nip: z.string().min(1, 'Masukkan NIP.').regex(/^\d{18}$/, 'NIP harus terdiri dari tepat 18 digit angka.'),
     nama_lengkap: z.string().min(1, 'Masukkan nama lengkap.'),
     email: z.string().min(1, 'Masukkan email.').email('Format email tidak valid.'),
-    password: z.string().min(8, 'Kata sandi minimal 8 karakter.'),
+    password: z.string().min(12, 'Kata sandi minimal 12 karakter.'),
     password_confirmation: z.string().min(1, 'Konfirmasi kata sandi wajib diisi.'),
     captcha_token: z.string().min(1, 'Selesaikan verifikasi captcha.'),
   })
@@ -391,6 +391,10 @@ export function RegisterPage() {
           onSubmit={handleSubmit(async (values) => {
             setError('')
             try {
+              await api.post('/api/v1/validasi-pendaftaran', {
+                nip: values.nip,
+                nama_lengkap: values.nama_lengkap,
+              })
               if (!emailTerverifikasi) {
                 const [{ createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification }, { firebaseAuth, firebaseConfigured }] = await Promise.all([import('firebase/auth'), import('../../lib/firebase')])
                 if (!firebaseConfigured) throw new Error('Firebase belum dikonfigurasi.')
@@ -414,7 +418,7 @@ export function RegisterPage() {
                 toast.success('Tautan verifikasi dikirim. Buka email, lalu kembali ke halaman ini.')
                 return
               }
-              const data = await registerWithFirebase({ nip: values.nip, nama_lengkap: values.nama_lengkap, email: values.email, id_token: firebaseToken.current, captcha_token: captchaToken.current })
+              const data = await registerWithFirebase({ nip: values.nip, nama_lengkap: values.nama_lengkap, email: values.email, password: values.password, id_token: firebaseToken.current, captcha_token: captchaToken.current })
               toast.success(data.message)
               navigate('/masuk', { replace: true })
             } catch (err) {
