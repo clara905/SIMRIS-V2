@@ -139,7 +139,7 @@ export function KelolaPegawai({ superAdmin = false }: { superAdmin?: boolean }) 
       setCreating(false)
       setForm(blank)
       refresh()
-    } catch (error) {
+    } catch {
       toast.error('Pegawai berhasil dibuat, tetapi penempatan awal belum berhasil. Silakan coba lagi.')
       setCreating(false)
       setSelected(createdPegawai)

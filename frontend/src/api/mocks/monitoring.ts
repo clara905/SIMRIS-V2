@@ -46,13 +46,13 @@ const records: Asesmen[] = [
     },
   ],
 }))
-for (const [index, jenis] of ['soa', 'sop', 'dokumen', 'lampiran'].entries()) {
+for (const [index, jenis] of ['sop', 'dokumen', 'lampiran'].entries()) {
   for (let i = 0; i < 3; i++)
     records.push({
       ...records[i],
       id: 100 + index * 10 + i,
       kode: `${jenis.toUpperCase()}-2026-${String(i + 1).padStart(3, '0')}`,
-      nama: `${{ soa: 'Pernyataan penerapan kontrol', sop: 'Prosedur pengamanan layanan', dokumen: 'Dokumen penilaian risiko', lampiran: 'Bukti pengujian kontrol' }[jenis]} — ${records[i].nama}`,
+      nama: `${{ sop: 'Prosedur pengamanan layanan', dokumen: 'Dokumen penilaian risiko', lampiran: 'Bukti pengujian kontrol' }[jenis]} — ${records[i].nama}`,
       jenis,
       lampiran_status: jenis === 'lampiran' && i === 0 ? 'bermasalah' : 'tersinkron',
     })

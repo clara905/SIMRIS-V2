@@ -41,7 +41,7 @@ test('assessment read and write permissions follow all roles', function (string 
     foreach (['/api/asesmen', '/api/asesmen/'.$id, '/api/asesmen/'.$id.'/risiko', '/api/asesmen/'.$id.'/aset', '/api/risiko/'.$f['risk']->id, '/api/risiko/'.$f['risk']->id.'/penilaian', '/api/risiko/'.$f['risk']->id.'/usulan-keputusan'] as $url) {
         $this->getJson($url)->assertOk();
     }
-    $can = in_array($role, ['STAFF', 'ADMIN_SATKER'], true);
+    $can = in_array($role, ['STAFF', 'ADMIN_SATKER', 'KASUB'], true);
     $response = $this->patchJson('/api/asesmen/'.$id, ['tujuan' => 'Tujuan baru']);
     if ($can) {
         $response->assertOk();
@@ -93,6 +93,21 @@ test('assessment creation requires running period frozen method and a unique act
     $id = $this->postJson('/api/asesmen', $payload)->assertCreated()->assertJsonPath('data.status', 'DRAFT')->assertJsonPath('data.nomor_versi', 1)->json('data.id');
     $this->postJson('/api/asesmen', $payload)->assertConflict()->assertJsonPath('code', 'seri_aktif_sudah_ada');
     $this->assertDatabaseHas('LOG_AUDIT', ['entitas' => 'ASESMEN_RISIKO', 'entitas_id' => $id, 'aksi' => 'CREATE', 'user_id' => $f['user']->id]);
+});
+test('Kasub may create a draft only in its own subbidang scope', function (): void {
+    $f = asesmenFixture('KASUB');
+    DB::table('ASESMEN_RISIKO')->where('id', $f['assessment']->id)->update(['status' => 'DITOLAK']);
+    $payload = ['unit_id' => $f['unit']->id, 'periode_id' => $f['period']->id, 'versi_metode_id' => $f['method']->id, 'tujuan' => 'Asesmen Kasub', 'ruang_lingkup' => 'Sub bidang sendiri'];
+
+    $this->actingAs($f['user'])
+        ->postJson('/api/asesmen', $payload)
+        ->assertCreated()
+        ->assertJsonPath('data.status', 'DRAFT')
+        ->assertJsonPath('data.dibuat_oleh', $f['user']->id);
+
+    $foreign = UnitOrganisasi::factory()->create(['jenis' => 'SUBBIDANG']);
+    $this->postJson('/api/asesmen', [...$payload, 'unit_id' => $foreign->id])
+        ->assertNotFound();
 });
 test('snapshot stays unchanged after source asset and catalog updates', function (): void {
     $f = asesmenFixture();

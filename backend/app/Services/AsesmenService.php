@@ -97,7 +97,7 @@ return $assessment;
     {
         return DB::transaction(function () use ($data, $actor): AsesmenRisiko {
             DB::table('ROLES')->where('kode', 'SUPER_ADMIN')->lockForUpdate()->first();
-            $unit = UnitOrganisasi::whereIn('id', $this->scope->idsForRoles($actor, ['ADMIN_SATKER', 'STAFF']))->whereKey($data['unit_id'])->lockForUpdate()->firstOrFail();
+            $unit = UnitOrganisasi::whereIn('id', $this->scope->idsForRoles($actor, ['ADMIN_SATKER', 'STAFF', 'KASUB']))->whereKey($data['unit_id'])->lockForUpdate()->firstOrFail();
             Gate::forUser($actor)->authorize('asesmen.create', [(int) $unit->id]);
             if (! $unit->aktif) {
                 throw new BusinessRuleException('unit_tidak_aktif', 'Unit asesmen harus aktif.');

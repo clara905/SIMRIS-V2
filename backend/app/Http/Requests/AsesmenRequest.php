@@ -25,7 +25,7 @@ class AsesmenRequest extends ApiRequest
             if ($assessment) {
                 Gate::authorize('asesmen.write', [$assessment]);
             } else {
-                abort_unless(app(ScopeUnit::class)->hasRole($this->user(), ['STAFF', 'ADMIN_SATKER']), 403, 'Hanya penyusun dapat membuat asesmen.');
+                abort_unless(app(ScopeUnit::class)->hasRole($this->user(), ['STAFF', 'ADMIN_SATKER', 'KASUB']), 403, 'Hanya penyusun dapat membuat asesmen.');
             }
         }
 

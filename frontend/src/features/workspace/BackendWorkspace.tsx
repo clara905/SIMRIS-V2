@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { lazy, useState } from 'react'
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Dialog } from 'radix-ui'
@@ -40,7 +40,11 @@ import { logout, revealNip, updateProfile, useSession, sessionKey } from '../../
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Drawer } from '../../components/Drawer'
 import { modules, label, display, type Resource } from './resources'
+import { statusAsesmenKasub } from '../kasub/hooks'
 import './workspace.css'
+
+const ReviewAsesmenPage = lazy(() => import('../kasub/ReviewAsesmenPage').then((module) => ({ default: module.ReviewAsesmenPage })))
+const BuatAsesmenPage = lazy(() => import('../kasub/BuatAsesmenPage').then((module) => ({ default: module.BuatAsesmenPage })))
 
 type Row = Record<string, unknown> & { id: number }
 type Page = {
@@ -88,14 +92,18 @@ function Failure({ error, retry }: { error: unknown; retry: () => void }) {
     </div>
   )
 }
-function Loading() {
+function PageSkeleton({ variant = 'table' }: { variant?: 'overview' | 'table' | 'detail' }) {
+  const rows = variant === 'detail' ? 4 : variant === 'overview' ? 5 : 7
   return (
-    <div className="ws-loading" role="status" aria-label="Memuat data">
-      <div className="ws-loading-aura">
-        <div className="ws-loading-spinner" />
-        <img src="/logo-kemhan.png" alt="" className="ws-loading-logo" />
+    <div className={'ws-page-skeleton ' + variant} role="status" aria-label="Memuat konten halaman">
+      <span className="sr-only">Memuat konten halaman…</span>
+      {variant === 'overview' && <div className="ws-skeleton-summary"><i /><i /><i /></div>}
+      <div className="ws-skeleton-head"><i /><i /></div>
+      <div className="ws-skeleton-lines">
+        {Array.from({ length: rows }, (_, index) => (
+          <i key={index} />
+        ))}
       </div>
-      <span>Memuat data...</span>
     </div>
   )
 }
@@ -125,13 +133,36 @@ export function BackendWorkspace() {
   const roleCodes = session.data?.roleCodes ?? []
   const pendingApproval = useQuery({ queryKey: ['approval-akun-count'], queryFn: async () => (await api.get<{ data: unknown[] }>('/api/v1/approval-akun')).data.data.length, enabled: roleCodes.includes('ADMIN_SATKER'), refetchInterval: 10_000, retry: false })
   const isSatkerAdmin = roleCodes.includes('ADMIN_SATKER') && !roleCodes.includes('SUPER_ADMIN')
+  const isKasubOnly = roleCodes.includes('KASUB') && !roleCodes.some((role) => ['SUPER_ADMIN', 'ADMIN_SATKER'].includes(role))
+  const isKabidOnly = roleCodes.includes('KABID') && !roleCodes.some((role) => ['SUPER_ADMIN', 'ADMIN_SATKER'].includes(role))
   const satkerUnit = useSatkerUnit()
-  const allowed = modules.filter(
-    (m) =>
+  const allowed = modules
+    .filter(
+      (m) =>
       !(isSatkerAdmin && ['Referensi', 'Organisasi'].includes(m.group)) &&
+      !(isKasubOnly && m.path === '/pegawai') &&
       (!m.admin || roleCodes.includes('SUPER_ADMIN')) &&
       (!m.roles || m.roles.some((r) => roleCodes.includes(r))),
-  )
+    )
+    .map((module) => {
+      if ((isKasubOnly || isKabidOnly) && module.path === '/unit') {
+        return { ...module, label: 'Sub bidang', description: 'Sub bidang dalam scope role aktif Anda.' }
+      }
+      if (isKabidOnly && module.path === '/pegawai') {
+        return {
+          ...module,
+          label: 'Pegawai',
+          description: 'Pegawai dan penempatan aktif pada sub bidang dalam lingkup bidang Anda.',
+          resources: module.resources.map((resource) =>
+            resource.key === 'penempatan-pegawai'
+              ? { ...resource, label: 'Penempatan sub bidang' }
+              : { ...resource, label: 'Pegawai' },
+          ),
+        }
+      }
+
+      return module
+    })
   const active = allowed.find((m) => m.path === location.pathname)
   const navigation = (
     <nav aria-label="Navigasi utama">
@@ -289,6 +320,10 @@ export function BackendWorkspace() {
             <KelolaPengguna superAdmin />
           ) : active.path === '/approval-akun' ? (
             <ApprovalPage />
+          ) : active.path === '/review-asesmen' ? (
+            <ReviewAsesmenPage />
+          ) : active.path === '/buat-asesmen' ? (
+            <BuatAsesmenPage />
           ) : (
             <>
               <div className="ws-page-heading">
@@ -841,7 +876,7 @@ function Overview() {
             </Link>
           </header>
           {latest.isPending ? (
-            <Loading />
+            <PageSkeleton variant="overview" />
           ) : latest.isError ? (
             <Failure error={latest.error} retry={() => void latest.refetch()} />
           ) : !latest.data.data.length ? (
@@ -925,7 +960,7 @@ function Overview() {
           {
             path: '/kepatuhan',
             label: 'Kontrol & kepatuhan',
-            text: 'Telusuri SOP dan SOA',
+            text: 'Telusuri SOP dan kontrol internal',
             icon: ShieldCheck,
           },
           {
@@ -959,8 +994,15 @@ function Registry({ resources }: { resources: Resource[] }) {
   const client = useQueryClient()
   const session = useSession()
   const resource = resources.find((r) => r.key === params.get('tab')) || resources[0]
+  const isKasubAssessment = resource.key === 'asesmen' && session.data?.roleCodes?.includes('KASUB')
+  const statusOptions = isKasubAssessment
+    ? statusAsesmenKasub.map((item) => ({ value: item.kode, label: item.label }))
+    : (resource.statuses ?? []).map((value) => ({ value, label: value }))
   const page = Math.max(1, Number(params.get('page')) || 1)
-  const status = params.get('status') || ''
+  const rawStatus = params.get('status') || ''
+  const status = isKasubAssessment
+    ? statusAsesmenKasub.find((item) => item.mencakup.includes(rawStatus as never))?.kode || rawStatus
+    : rawStatus
   const id = params.get('id') || ''
   const [idDraft, setIdDraft] = useState(id)
   const [selected, setSelected] = useState<Row | null>(null)
@@ -969,8 +1011,8 @@ function Registry({ resources }: { resources: Resource[] }) {
   const filter = {
     ...(resource.defaultFilter || {}),
     ...(id ? { id } : {}),
-    ...(status && resource.statuses?.includes(status)
-      ? { [resource.statusField || 'status']: status }
+    ...(status && statusOptions.some((option) => option.value === status)
+      ? { [isKasubAssessment ? 'status_kasub' : resource.statusField || 'status']: status }
       : {}),
   }
   const query = useQuery({
@@ -1022,15 +1064,15 @@ function Registry({ resources }: { resources: Resource[] }) {
             />
             <button type="submit">Cari</button>
           </form>
-          {resource.statuses && (
+          {statusOptions.length > 0 && (
             <select
               aria-label="Filter status"
               value={status}
               onChange={(e) => update({ status: e.target.value, page: '' })}
             >
               <option value="">Semua status</option>
-              {resource.statuses.map((value) => (
-                <option key={value}>{value}</option>
+              {statusOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
           )}
@@ -1067,7 +1109,7 @@ function Registry({ resources }: { resources: Resource[] }) {
           )}
         </div>
         {query.isPending ? (
-          <Loading />
+          <PageSkeleton />
         ) : query.isError ? (
           <Failure error={query.error} retry={() => void query.refetch()} />
         ) : (
@@ -1235,7 +1277,7 @@ function RecordDetail({ row, resource }: { row: Row; resource: Resource }) {
             columns: ['kode', 'skenario'],
           },
         ]
-      : ['dokumen', 'sop', 'soa'].includes(resource.key)
+      : ['dokumen', 'sop'].includes(resource.key)
         ? [
             {
               key: 'versi',
@@ -1324,7 +1366,7 @@ function RecordDetail({ row, resource }: { row: Row; resource: Resource }) {
             </p>
           )}
           {records.isPending ? (
-            <Loading />
+            <PageSkeleton variant="detail" />
           ) : records.isError ? (
             <Failure error={records.error} retry={() => void records.refetch()} />
           ) : (

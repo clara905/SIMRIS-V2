@@ -15,7 +15,6 @@ import { tanggal, waktu } from '../../lib/format'
 import s from '../Records.module.css'
 const tabs = [
   { value: 'asesmen', label: 'Asesmen' },
-  { value: 'soa', label: 'SOA' },
   { value: 'sop', label: 'SOP' },
   { value: 'dokumen', label: 'Dokumen' },
   { value: 'lampiran', label: 'Lampiran' },

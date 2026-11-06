@@ -109,6 +109,8 @@ export const employees: Pegawai[] = names.slice(1).map((nama, i) => ({
 export const audits: Audit[] = [
   {
     id: 1,
+    user_id: 1,
+    entitas_id: 1,
     waktu: '2026-10-12T03:24:00Z',
     pelaku: 'Aditya Pratama',
     aksi: 'Memperbarui',
@@ -119,6 +121,8 @@ export const audits: Audit[] = [
   },
   {
     id: 2,
+    user_id: 1,
+    entitas_id: 2,
     waktu: '2026-10-12T02:45:00Z',
     pelaku: 'Aditya Pratama',
     aksi: 'Membekukan',
@@ -129,6 +133,8 @@ export const audits: Audit[] = [
   },
   {
     id: 3,
+    user_id: 1,
+    entitas_id: 3,
     waktu: '2026-10-12T01:30:00Z',
     pelaku: 'Aditya Pratama',
     aksi: 'Menambahkan',

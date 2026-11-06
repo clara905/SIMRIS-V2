@@ -39,6 +39,8 @@ export function audit(
 ) {
   db.audit.unshift({
     id: Date.now(),
+    user_id: null,
+    entitas_id: Date.now(),
     waktu: new Date().toISOString(),
     pelaku: JSON.parse(sessionStorage.getItem('simris-session') || '{}').nama || 'Pengguna',
     aksi,

@@ -14,6 +14,7 @@ use App\Services\AsesmenService;
 use App\Services\DokumenService;
 use App\Services\KatalogService;
 use App\Services\KepatuhanService;
+use App\Services\ScopeUnit;
 use Dedoc\Scramble\Attributes\Response;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -30,6 +31,22 @@ class MonitoringController extends Controller
             'asesmen' => app(AsesmenService::class)->assessments($actor),'soa','sop' => app(KepatuhanService::class)->query($resource, $actor),'log-audit' => LogAudit::query(),default => app(DokumenService::class)->query($resource, $actor)
         };
         $fields = $resource === 'log-audit' ? ['id', 'user_id', 'entitas', 'entitas_id', 'aksi', 'waktu'] : ['id', ...$query->getModel()->getFillable()];
+        $kasubStatus = $resource === 'asesmen' ? data_get($input, 'filter.status_kasub') : null;
+        if ($kasubStatus !== null) {
+            unset($input['filter']['status_kasub']);
+            if (app(ScopeUnit::class)->hasRole($actor, ['KASUB'])) {
+                $statuses = [
+                    'DRAFT' => ['DRAFT', 'MENUNGGU_KASUB', 'RESIDUAL_DRAFT'],
+                    'MENUNGGU_KABID' => ['MENUNGGU_KABID', 'VERIFIKASI_KABID'],
+                    'DISAHKAN' => ['DISAHKAN'],
+                    'DITOLAK' => ['DITOLAK'],
+                    'RESIDUAL' => ['PENANGANAN', 'VERIFIKASI_KASUB', 'MENUNGGU_KASATKER'],
+                ];
+                if (isset($statuses[$kasubStatus])) {
+                    $query->whereIn('status', $statuses[$kasubStatus]);
+                }
+            }
+        }
 
         return app(KatalogService::class)->filtered($query, $input, array_diff($fields, ['isi_teks', 'data_lama', 'data_baru', 'storage_key', 'checksum_sha256']), $resource !== 'log-audit');
     }

@@ -92,6 +92,20 @@ test('submission requires all initial ratings and proposals and invalid transiti
     $this->actingAs($f['actors']['STAFF'])->postJson('/api/asesmen/'.$f['assessment']->id.'/ajukan')->assertConflict()->assertJsonPath('code', 'asesmen_belum_lengkap');
     $this->actingAs($f['actors']['KASUB'])->postJson('/api/asesmen/'.$f['assessment']->id.'/review', ['tahap' => 'KASUB_AWAL', 'keputusan' => 'SETUJU'])->assertConflict()->assertJsonPath('code', 'transisi_tidak_valid');
 });
+test('Kasub may submit its own complete assessment directly to Kabid without self review', function (): void {
+    $f = workflowFixture();
+    $assessment = $f['assessment'];
+    $assessment->dibuat_oleh = $f['actors']['KASUB']->id;
+    $assessment->save();
+    Risiko::where('asesmen_id', $assessment->id)->update(['dibuat_oleh' => $f['actors']['KASUB']->id]);
+
+    $this->actingAs($f['actors']['KASUB'])
+        ->postJson('/api/asesmen/'.$assessment->id.'/ajukan')
+        ->assertOk()
+        ->assertJsonPath('data.status', 'MENUNGGU_KABID');
+
+    $this->assertDatabaseMissing('REVIEW_ASESMEN', ['asesmen_id' => $assessment->id, 'reviewer_id' => $f['actors']['KASUB']->id]);
+});
 test('review enforces required rejection notes and separation of duties', function (): void {
     $f = workflowFixture();
     $id = $f['assessment']->id;

@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   ClipboardCheck,
+  FilePlus2,
   Boxes,
   ShieldCheck,
   FileText,
@@ -65,6 +66,24 @@ export const modules = [
     ],
   },
   {
+    path: '/review-asesmen',
+    label: 'Review asesmen',
+    group: 'Kewenangan Kasub',
+    icon: ClipboardCheck,
+    roles: ['KASUB'],
+    description: 'Telaah asesmen risiko dalam lingkup review Kasub.',
+    resources: [] as Resource[],
+  },
+  {
+    path: '/buat-asesmen',
+    label: 'Buat asesmen',
+    group: 'Kewenangan Kasub',
+    icon: FilePlus2,
+    roles: ['KASUB'],
+    description: 'Buat draft Form Risk Assessment pada sub bidang Anda.',
+    resources: [] as Resource[],
+  },
+  {
     path: '/aset',
     label: 'Inventaris aset',
     group: 'Ruang kerja',
@@ -87,9 +106,8 @@ export const modules = [
     label: 'Kontrol & kepatuhan',
     group: 'Ruang kerja',
     icon: ShieldCheck,
-    description: 'Pantau Statement of Applicability, SOP, dan kontrol internal.',
+    description: 'Pantau SOP dan kontrol internal.',
     resources: [
-      resource('soa', 'SOA', ['id', 'ruang_lingkup', 'unit_id', 'periode_id', 'standar_id']),
       resource('sop', 'SOP', ['kode', 'judul', 'unit_pemilik_id']),
       resource('kontrol-internal', 'Kontrol internal', ['kode', 'nama', 'unit_pemilik_id']),
     ],

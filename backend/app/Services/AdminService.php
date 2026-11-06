@@ -51,11 +51,32 @@ class AdminService
             };
         }
         $lead = $this->scope->hasRole($user, ['ADMIN_SATKER', 'KASATKER', 'KABID', 'KASUB']);
+        $isKabidOnly = $this->scope->hasRole($user, ['KABID'])
+            && ! $this->scope->hasRole($user, ['ADMIN_SATKER', 'SUPER_ADMIN']);
+        $kabidSubbidangIds = $isKabidOnly
+            ? UnitOrganisasi::whereIn('id', $ids)->where('jenis', 'SUBBIDANG')->pluck('id')->map(fn ($id) => (int) $id)->all()
+            : [];
+        $kasubSubbidangIds = $this->scope->roles($user)
+            ->where('kode', 'KASUB')
+            ->pluck('unit_id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->intersect($ids)
+            ->values()
+            ->all();
 
         return match ($resource) {
-            'unit-organisasi' => $query->whereIn('id', $ids)->whereIn('id', $lead ? $ids : DB::table('PENEMPATAN_PEGAWAI')->where('pegawai_id', $user->pegawai_id)->where('utama', true)->whereNull('selesai')->where('mulai', '<=', today())->pluck('unit_id')),
-            'pegawai' => $lead ? $query->whereIn('id', DB::table('PENEMPATAN_PEGAWAI')->select('pegawai_id')->whereIn('unit_id', $ids)->where('utama', true)->where('mulai', '<=', today())->whereNull('selesai')) : $query->whereKey($user->pegawai_id ?? 0),
-            'penempatan-pegawai' => $lead ? $query->whereIn('unit_id', $ids) : $query->where('pegawai_id', $user->pegawai_id ?? 0)->whereIn('unit_id', $ids),
+            'unit-organisasi' => $this->scope->hasRole($user, ['KASUB']) && ! $this->scope->hasRole($user, ['ADMIN_SATKER', 'SUPER_ADMIN'])
+                ? $query->whereIn('id', $kasubSubbidangIds)->where('jenis', 'SUBBIDANG')
+                : ($isKabidOnly
+                    ? $query->whereIn('id', $ids)->where('jenis', 'SUBBIDANG')
+                    : $query->whereIn('id', $ids)->whereIn('id', $lead ? $ids : DB::table('PENEMPATAN_PEGAWAI')->where('pegawai_id', $user->pegawai_id)->where('utama', true)->whereNull('selesai')->where('mulai', '<=', today())->pluck('unit_id'))),
+            'pegawai' => $isKabidOnly
+                ? $query->whereIn('id', DB::table('PENEMPATAN_PEGAWAI')->select('pegawai_id')->whereIn('unit_id', $kabidSubbidangIds)->where('utama', true)->where('mulai', '<=', today())->whereNull('selesai'))
+                : ($lead ? $query->whereIn('id', DB::table('PENEMPATAN_PEGAWAI')->select('pegawai_id')->whereIn('unit_id', $ids)->where('utama', true)->where('mulai', '<=', today())->whereNull('selesai')) : $query->whereKey($user->pegawai_id ?? 0)),
+            'penempatan-pegawai' => $isKabidOnly
+                ? $query->whereIn('unit_id', $kabidSubbidangIds)
+                : ($lead ? $query->whereIn('unit_id', $ids) : $query->where('pegawai_id', $user->pegawai_id ?? 0)->whereIn('unit_id', $ids)),
             default => $query,
         };
     }

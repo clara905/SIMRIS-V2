@@ -18,11 +18,16 @@ class AsesmenPolicy
 
     public function create(User $user, int $unit): Response
     {
-        return in_array($unit, $this->scope->idsForRoles($user, ['ADMIN_SATKER', 'STAFF']), true) ? Response::allow() : Response::deny('Hanya penyusun dalam scope dapat membuat asesmen.');
+        return in_array($unit, $this->scope->idsForRoles($user, ['ADMIN_SATKER', 'STAFF', 'KASUB']), true)
+            ? Response::allow()
+            : Response::deny('Hanya penyusun dalam scope dapat membuat asesmen.');
     }
 
     public function write(User $user, AsesmenRisiko $assessment): Response
     {
-        return in_array($assessment->unit_id, $this->scope->idsForRoles($user, ['ADMIN_SATKER']), true) || ($assessment->dibuat_oleh === $user->id && in_array($assessment->unit_id, $this->scope->idsForRoles($user, ['STAFF']), true)) ? Response::allow() : Response::deny('Hanya penyusun atau ADMIN_SATKER dalam scope dapat mengubah asesmen.');
+        return in_array($assessment->unit_id, $this->scope->idsForRoles($user, ['ADMIN_SATKER']), true)
+            || ($assessment->dibuat_oleh === $user->id && in_array($assessment->unit_id, $this->scope->idsForRoles($user, ['STAFF', 'KASUB']), true))
+            ? Response::allow()
+            : Response::deny('Hanya penyusun atau ADMIN_SATKER dalam scope dapat mengubah asesmen.');
     }
 }

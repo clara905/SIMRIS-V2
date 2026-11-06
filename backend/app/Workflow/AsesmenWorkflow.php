@@ -17,6 +17,7 @@ use App\Services\AuditService;
 use App\Services\KeputusanService;
 use App\Services\PenangananService;
 use App\Services\ReviewScope;
+use App\Services\ScopeUnit;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
@@ -55,6 +56,12 @@ class AsesmenWorkflow
             }
             $before = $assessment->getAttributes();
             $next = $transition['ke'];
+            if (in_array($action, ['AJUKAN', 'AJUKAN_RESIDUAL'], true)
+                && $assessment->dibuat_oleh === $actor->id
+                && app(ScopeUnit::class)->hasRole($actor, ['KASUB'])) {
+                // Penyusun Kasub tidak boleh mereview asesmennya sendiri.
+                $next = $action === 'AJUKAN' ? 'MENUNGGU_KABID' : 'VERIFIKASI_KABID';
+            }
             $kind = UnitOrganisasi::findOrFail($assessment->unit_id)->jenis;
             $skip = config('alur_review.lewati.'.$kind, []);
             if ($next === 'MENUNGGU_KASUB' && in_array('KASUB', $skip, true)) {
@@ -146,6 +153,9 @@ class AsesmenWorkflow
 
     public function separation(AsesmenRisiko $assessment, User $actor, string $role): void
     {
+        if ($assessment->dibuat_oleh === $actor->id) {
+            throw new BusinessRuleException('pemisahan_tugas', 'Penyusun asesmen tidak dapat menjadi reviewer atau pemutus asesmen yang sama.');
+        }
         if (PenilaianRisiko::where('dinilai_oleh', $actor->id)->whereIn('risiko_id', Risiko::where('asesmen_id', $assessment->id)->select('id'))->exists()) {
             throw new BusinessRuleException('pemisahan_tugas', 'Pembuat penilaian tidak dapat menjadi reviewer atau pemutus asesmen yang sama.');
         }

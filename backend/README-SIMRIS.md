@@ -16,7 +16,19 @@ composer install
 
 ## Database baru
 
-Siapkan database MySQL kosong khusus SIMRIS. Lengkapi `.env` berdasarkan `.env.example`; jangan menimpa konfigurasi yang sudah ada. Isi `APP_KEY` dengan `php artisan key:generate` hanya jika belum tersedia. Konfigurasi wajib untuk seeder:
+Migration di `database/migrations` membangun seluruh skema SIMRIS dari database kosong. Untuk laptop baru, clone/pull repository terbaru, lalu buat database MySQL kosong dengan nama berbeda dari database sumber, misalnya `simris_teman`. Contoh melalui MySQL:
+
+```sql
+CREATE DATABASE simris_teman CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+Di folder `backend`, salin template ke `.env`, lalu sesuaikan koneksi agar menunjuk ke database baru tersebut:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Atur `DB_DATABASE=simris_teman`, `DB_USERNAME`, dan `DB_PASSWORD` sesuai MySQL di laptop itu. Jangan menyalin `.env` laptop lama atau menimpa konfigurasi database yang sudah ada. Isi `APP_KEY` dengan `php artisan key:generate` setelah `.env` dibuat. Konfigurasi wajib untuk seeder:
 
 ```dotenv
 SIMRIS_ADMIN_USERNAME=admin
@@ -28,13 +40,14 @@ ASET_UNIT_BAWAAN_KODE=SATKER-DEMO
 
 Isi password sendiri. `SIMRIS_DEMO_PASSWORD` hanya diperlukan jika `APP_ENV=local`. Tidak ada password bawaan. Semua akun yang dibuat seeder wajib mengganti password.
 
-Setelah memastikan `DB_DATABASE` menunjuk database kosong yang benar:
+Setelah dependencies terpasang dan memastikan `DB_DATABASE` menunjuk database kosong yang benar:
 
 ```powershell
+composer install
 php artisan migrate --seed
 ```
 
-Migrasi ini merupakan skema awal, bukan konverter database aplikasi lama. Migrasi domain menolak tabel `users`/`USERS` yang sudah ada. Jangan menggunakan `migrate:fresh` pada database berisi data pengguna. Migrasi awal Laravel disesuaikan agar tidak membuat tabel `users` yang bertabrakan dengan `USERS` ERD di MySQL Windows. Tabel infrastruktur sesi, cache, job, reset token, dan Sanctum tetap tersedia.
+Perintah tersebut membuat skema dan data awal/demo; tidak menyalin data operasional dari `simrisoke`. Migrasi ini bukan konverter atau pemindah isi database. Migrasi domain menolak tabel `users`/`USERS` yang sudah ada. Jangan menggunakan `migrate:fresh` pada database berisi data pengguna. Migrasi awal Laravel disesuaikan agar tidak membuat tabel `users` yang bertabrakan dengan `USERS` ERD di MySQL Windows. Tabel infrastruktur sesi, cache, job, reset token, dan Sanctum tetap tersedia.
 
 Seeder dasar membuat enam role, satu SUPER_ADMIN global, sumber `API_ASET`, dan kategori `BELUM_DIKATEGORIKAN`. Seeder `local` menambahkan satu satker, dua bidang dengan masing-masing satu subbidang, lima pegawai/akun operasional, metode 5×5 beku, contoh katalog/kontrol/aset, dan periode tahun berjalan. Akun demo menggunakan username `admin_satker-demo`, `kasatker-demo`, `kabid-demo`, `kasub-demo`, `staff-demo`. Data contoh aset bukan respons API sungguhan.
 
