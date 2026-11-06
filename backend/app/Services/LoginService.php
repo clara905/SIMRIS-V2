@@ -27,14 +27,23 @@ final class LoginService
         }
         try {
             $identity = $this->firebase->signInWithPassword($user->email_login, $password);
-        } catch (FirebaseAuthException $e) {
-            if ($e->alasan === FirebaseAuthException::KREDENSIAL_SALAH) throw new LoginGagal('kredensial_salah', 401, 'NIP/email atau kata sandi salah.');
-            Log::error('Firebase Auth gagal saat login', ['reason'=>$e->alasan, 'firebase_code'=>$e->kodeFirebase]);
+        } catch (FirebaseAuthException $exception) {
+            if ($exception->alasan === FirebaseAuthException::KREDENSIAL_SALAH) {
+                throw new LoginGagal('kredensial_salah', 401, 'NIP/email atau kata sandi salah.');
+            }
+
+            Log::error('Firebase Auth gagal saat login', [
+                'reason' => $exception->alasan,
+                'firebase_code' => $exception->kodeFirebase,
+            ]);
+
             throw new LoginGagal('firebase_unavailable', 503, 'Layanan autentikasi sedang bermasalah. Coba lagi nanti.');
         }
-        if ((bool)config('simris.firebase.wajib_email_terverifikasi') && !$identity->emailVerified) throw new LoginGagal('email_unverified', 403, 'Email belum terverifikasi.');
+        if (config('simris.firebase.wajib_email_terverifikasi') && ! $identity->emailVerified) {
+            throw new LoginGagal('email_unverified', 403, 'Email belum terverifikasi.');
+        }
         if (!$user->aktif || ($user->pegawai !== null && !$user->pegawai->aktif)) {
-            throw new LoginGagal('akun_nonaktif', 403, 'Akun tidak aktif. Hubungi administrator.');
+            throw new LoginGagal('akun_nonaktif', 403, 'Akun menunggu persetujuan Admin Satker.');
         }
         $this->audit->record('USERS', $user->id, 'LOGIN', null, ['hasil' => 'berhasil'], $user->id);
         return $user;
@@ -61,8 +70,8 @@ final class LoginService
     public function validasiPendaftaran(string $nip, string $namaLengkap): object
     {
         $nip = trim($nip);
-        if (! preg_match('/^[0-9]{18}$/', $nip)) {
-            throw ValidationException::withMessages(['nip' => 'NIP harus terdiri dari tepat 18 digit angka.']);
+        if (! preg_match('/^[0-9]{1,18}$/', $nip)) {
+            throw ValidationException::withMessages(['nip' => 'NIP harus terdiri dari 1 sampai 18 digit angka.']);
         }
 
         $pegawai = DB::table('PEGAWAI')->where('nip', $nip)->first();

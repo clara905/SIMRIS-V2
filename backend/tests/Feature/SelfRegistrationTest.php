@@ -23,17 +23,17 @@ class SelfRegistrationTest extends TestCase
         $this->siapkan();
     }
 
-    public function test_verified_staff_registration_creates_inactive_local_password_without_scope(): void
+    public function test_verified_staff_registration_creates_active_local_password_without_scope(): void
     {
         $unit = UnitOrganisasi::forceCreate(['parent_id'=>null,'kode'=>'TEST-SAT','nama'=>'Satker Test','jenis'=>'SATKER','aktif'=>true]);
         $pegawai = Pegawai::forceCreate(['nip'=>'12345678','nama'=>'Budi Santoso','email_kontak'=>'kontak@example.test','jenis_kepegawaian'=>'PNS','aktif'=>true]);
         PenempatanPegawai::forceCreate(['pegawai_id'=>$pegawai->id,'unit_id'=>$unit->id,'mulai'=>now()->toDateString(),'selesai'=>null,'utama'=>true]);
         $this->firebase->tambah('budi@example.test','firebase-password');
-        $this->withHeaders(['Referer'=>'http://localhost'])->postJson('/api/v1/daftar',[
+        $this->withHeaders(['Origin'=>'http://localhost:5173'])->postJson('/api/v1/daftar',[
             'nip'=>'12345678','nama_lengkap'=>'  budi   santoso ','email'=>'Budi@example.test','password'=>'LocalPass#123','password_confirmation'=>'LocalPass#123','id_token'=>'token:budi@example.test','captcha_token'=>'token-sah',
-        ])->assertCreated()->assertJsonPath('message','Pendaftaran diterima dan menunggu persetujuan Admin Satker.');
+        ])->assertCreated()->assertJsonPath('message','Email terverifikasi dan akun berhasil dibuat. Silakan masuk untuk mengajukan role.');
         $user=User::query()->where('pegawai_id',$pegawai->id)->firstOrFail();
-        $this->assertFalse($user->aktif);
+        $this->assertTrue($user->aktif);
         $this->assertTrue(Hash::check('LocalPass#123',$user->password_hash));
         $this->assertDatabaseCount('USER_ROLE_SCOPE',0);
         $this->assertDatabaseHas('LOG_AUDIT',['entitas'=>'USERS','entitas_id'=>$user->id,'aksi'=>'CREATE']);

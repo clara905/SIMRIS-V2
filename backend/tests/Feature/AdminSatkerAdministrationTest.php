@@ -6,8 +6,10 @@ use App\Models\Role;
 use App\Models\UnitOrganisasi;
 use App\Models\User;
 use App\Models\UserRoleScope;
+use App\Contracts\FirebaseAuthGateway;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Tests\Support\FakeFirebaseAuthGateway;
 
 uses(LazilyRefreshDatabase::class);
 
@@ -36,6 +38,9 @@ function satkerAdminFixture(): array
     ]);
     $admin = User::factory()->create(['pegawai_id' => $actorPegawai->id]);
     grantRole($admin, 'ADMIN_SATKER', $root->id);
+    $firebase = new FakeFirebaseAuthGateway();
+    $firebase->tambah($admin->email_login, 'password-testing');
+    app()->instance(FirebaseAuthGateway::class, $firebase);
 
     foreach (['STAFF', 'KASUB', 'KABID', 'KASATKER', 'SUPER_ADMIN', 'ADMIN_SATKER'] as $code) {
         Role::firstOrCreate(['kode' => $code], ['nama' => $code]);

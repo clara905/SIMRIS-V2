@@ -40,7 +40,7 @@ class AccountApprovalController extends Controller
 
     public function unitOptions(Request $request)
     {
-        $role = $request->query('role');
+        $role = (string) $request->query('role', '');
         $employeeId = $request->user()->pegawai_id;
         $placement = $employeeId ? DB::table('PENEMPATAN_PEGAWAI')
             ->where('pegawai_id', $employeeId)
@@ -70,8 +70,8 @@ class AccountApprovalController extends Controller
     public function submit(Request $request, AuditService $audit)
     {
         $data = $request->validate([
-            'role_kode' => ['required', Rule::in(self::ROLE_DIAJUKAN)],
-            'unit_id' => ['required', 'integer', Rule::exists('UNIT_ORGANISASI', 'id')],
+            'role_kode' => ['required', 'string', 'in:STAFF,KASUB,KABID,KASATKER'],
+            'unit_id' => ['required_if:role_kode,KASUB,KABID,KASATKER', 'nullable', 'integer', Rule::exists('UNIT_ORGANISASI', 'id')],
             'informasi_pendukung' => ['required', 'string', 'min:10', 'max:3000'],
         ]);
 
@@ -92,7 +92,9 @@ class AccountApprovalController extends Controller
         if (! $placement) {
             throw ValidationException::withMessages(['pegawai' => 'Pegawai belum memiliki penempatan utama yang aktif.']);
         }
-        $selectedUnit = DB::table('UNIT_ORGANISASI')->where('id', $data['unit_id'])->first();
+        $selectedUnit = isset($data['unit_id'])
+            ? DB::table('UNIT_ORGANISASI')->where('id', $data['unit_id'])->first()
+            : null;
         $expectedKind = match ($data['role_kode']) {
             'KASATKER' => 'SATKER',
             'KABID' => 'BIDANG',

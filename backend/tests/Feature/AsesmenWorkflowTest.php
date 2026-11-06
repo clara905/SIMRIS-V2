@@ -80,6 +80,10 @@ test('review route hides foreign units and denies wrong hierarchical role levels
     grantRole($user, 'KASUB', UnitOrganisasi::factory()->create()->id);
     $this->actingAs($user)->postJson('/api/asesmen/'.$f['assessment']->id.'/review', ['tahap' => 'KASUB_AWAL', 'keputusan' => 'SETUJU'])->assertNotFound();
     grantRole($user, 'KASUB', $f['satker']->id);
+    DB::table('PENEMPATAN_PEGAWAI')
+        ->where('pegawai_id', $user->pegawai_id)
+        ->where('utama', true)
+        ->update(['unit_id' => $f['satker']->id]);
     $this->postJson('/api/asesmen/'.$f['assessment']->id.'/review', ['tahap' => 'KASUB_AWAL', 'keputusan' => 'SETUJU'])->assertForbidden();
 });
 test('submission requires all initial ratings and proposals and invalid transitions return 409', function (): void {

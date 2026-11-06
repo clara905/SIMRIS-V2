@@ -11,6 +11,29 @@ class SimrisSeeder extends Seeder
 {
     public function run(): void
     {
+        // Validate all required credentials before opening a transaction or
+        // writing any seed data. This keeps a missing configuration a clean,
+        // predictable input error rather than a partial seed attempt.
+        foreach (['username', 'email', 'password'] as $field) {
+            $value = config("simris.admin.$field");
+
+            if (!is_string($value) || trim($value) === '') {
+                throw new InvalidArgumentException(
+                    'Isi SIMRIS_ADMIN_USERNAME, SIMRIS_ADMIN_EMAIL, dan SIMRIS_ADMIN_PASSWORD sebelum seeding.'
+                );
+            }
+        }
+
+        if (app()->environment('local')) {
+            $demoPassword = config('simris.demo_password');
+
+            if (!is_string($demoPassword) || trim($demoPassword) === '') {
+                throw new InvalidArgumentException(
+                    'Isi SIMRIS_DEMO_PASSWORD untuk akun contoh lokal.'
+                );
+            }
+        }
+
         DB::transaction(function (): void {
 
             /*
@@ -39,23 +62,6 @@ class SimrisSeeder extends Seeder
                         ),
                     ]
                 );
-            }
-
-            /*
-            |--------------------------------------------------------------------------
-            | 2. VALIDASI KONFIGURASI ADMIN
-            |--------------------------------------------------------------------------
-            */
-
-            foreach (['username', 'email', 'password'] as $field) {
-
-                $value = config("simris.admin.$field");
-
-                if (!is_string($value) || trim($value) === '') {
-                    throw new InvalidArgumentException(
-                        'Isi SIMRIS_ADMIN_USERNAME, SIMRIS_ADMIN_EMAIL, dan SIMRIS_ADMIN_PASSWORD sebelum seeding.'
-                    );
-                }
             }
 
             /*
@@ -136,13 +142,7 @@ class SimrisSeeder extends Seeder
         int $kategori
     ): void {
 
-        $password = config('simris.demo_password');
-
-        if (!is_string($password) || trim($password) === '') {
-            throw new InvalidArgumentException(
-                'Isi SIMRIS_DEMO_PASSWORD untuk akun contoh lokal.'
-            );
-        }
+        $password = (string) config('simris.demo_password');
 
         /*
         |--------------------------------------------------------------------------

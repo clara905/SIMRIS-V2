@@ -11,7 +11,7 @@ class PreflightRegisterRequest extends ApiRequest
     public function rules(): array
     {
         return [
-            'nip' => ['required', 'string', 'regex:/^[0-9]{18}$/', Rule::exists('PEGAWAI', 'nip')],
+            'nip' => ['required', 'string', 'regex:/^[0-9]{1,18}$/', Rule::exists('PEGAWAI', 'nip')],
             'nama_lengkap' => ['required', 'string', 'max:255'],
         ];
     }
@@ -21,7 +21,7 @@ class PreflightRegisterRequest extends ApiRequest
         return [
             ...parent::messages(),
             'nip.required' => 'NIP wajib diisi.',
-            'nip.regex' => 'NIP harus terdiri dari tepat 18 digit angka.',
+            'nip.regex' => 'NIP harus terdiri dari 1 sampai 18 digit angka.',
             'nip.exists' => 'NIP tidak ditemukan di data pegawai.',
         ];
     }

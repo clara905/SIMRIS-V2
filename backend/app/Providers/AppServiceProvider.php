@@ -118,6 +118,10 @@ class AppServiceProvider extends ServiceProvider
             'kepatuhan.write',
             [KepatuhanPolicy::class, 'write']
         );
+        Gate::define(
+            'kepatuhan.review-sop',
+            [KepatuhanPolicy::class, 'reviewSop']
+        );
 
         Gate::define(
             'asesmen.view',

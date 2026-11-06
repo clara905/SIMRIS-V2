@@ -147,7 +147,7 @@ test('audit recursively removes sensitive fields and cannot be mutated through i
     expect(fn () => $log->delete())->toThrow(LogicException::class);
     expect(fn () => $log->forceFill(['aksi' => 'OTHER'])->save())->toThrow(LogicException::class);
 });
-test('only a super admin can delete an audit entry', function (): void {
+test('audit deletion endpoint remains disabled', function (): void {
     $superAdmin = User::factory()->create();
     grantRole($superAdmin, 'SUPER_ADMIN');
     $auditId = DB::table('LOG_AUDIT')->insertGetId([
@@ -159,8 +159,8 @@ test('only a super admin can delete an audit entry', function (): void {
         'waktu' => now(),
     ]);
 
-    $this->actingAs($superAdmin)->deleteJson("/api/log-audit/$auditId")->assertNoContent();
-    $this->assertDatabaseMissing('LOG_AUDIT', ['id' => $auditId]);
+    $this->actingAs($superAdmin)->deleteJson("/api/log-audit/$auditId")->assertNotFound();
+    $this->assertDatabaseHas('LOG_AUDIT', ['id' => $auditId]);
 
     $staff = User::factory()->create();
     grantRole($staff, 'STAFF', UnitOrganisasi::factory()->create()->id);
@@ -173,7 +173,7 @@ test('only a super admin can delete an audit entry', function (): void {
         'waktu' => now(),
     ]);
 
-    $this->actingAs($staff)->deleteJson("/api/log-audit/$anotherAuditId")->assertForbidden();
+    $this->actingAs($staff)->deleteJson("/api/log-audit/$anotherAuditId")->assertNotFound();
     $this->assertDatabaseHas('LOG_AUDIT', ['id' => $anotherAuditId]);
 });
 test('csrf protection rejects login without a valid token outside testing bypass', function (): void {

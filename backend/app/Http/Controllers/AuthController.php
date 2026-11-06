@@ -10,11 +10,13 @@ use App\Models\User;
 use App\Services\AuditService;
 use App\Services\ScopeUnit;
 use App\Services\TotpVerifier;
+use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
@@ -35,27 +37,24 @@ class AuthController extends Controller
         }
         $user = DB::transaction(function () use ($request, $loginInput, $audit, $scope, $totp): ?User {
             $user = User::query()
-                ->where(fn ($q) => $q->where('email_login', $loginInput)->orWhereHas('pegawai', fn ($pegawai) => $pegawai->where('nip', $loginInput)))
+                ->where(fn ($q) => $q->where('email_login', $loginInput)
+                    ->orWhere('username', $loginInput)
+                    ->orWhereHas('pegawai', fn ($pegawai) => $pegawai->where('nip', $loginInput)))
                 ->lockForUpdate()
                 ->first();
-            $valid = false;
-            if ($user) {
-                try {
-                    $identity = app(\App\Contracts\FirebaseAuthGateway::class)->signInWithPassword($user->email_login, (string)$request->input('password'));
-                    $valid = !(bool)config('simris.firebase.wajib_email_terverifikasi') || $identity->emailVerified;
-                } catch (\App\Support\Firebase\FirebaseAuthException) {
-                    $valid = false;
-                }
-            }
+            $valid = $user !== null
+                && Hash::check((string) $request->input('password'), $user->password_hash);
             if (! $user || ! $valid) {
-                $audit->record('USERS', $user?->id ?? 0, 'LOGIN_FAILED', null, ['hasil' => 'gagal']);
+                $audit->record('USERS', $user?->id ?? 0, 'LOGIN_FAILED:password_mismatch', null, ['hasil' => 'gagal']);
                 return null;
             }
-            if (! $user->aktif || ($user->pegawai !== null && ! $user->pegawai->aktif) || ! $user->penugasanAktif()->exists()) {
-                throw new \App\Exceptions\LoginGagal('akun_pending', 403, 'Akun menunggu persetujuan Admin Satker.');
+            if (! $user->aktif || ($user->pegawai !== null && ! $user->pegawai->aktif)) {
+                $audit->record('USERS', $user->id, 'LOGIN_FAILED:inactive', null, ['hasil' => 'gagal']);
+
+                return null;
             }
             if (config('security.super_admin_totp') && $scope->isSuper($user) && ! $totp->verify($user, $request->input('totp'))) {
-                $audit->record('USERS', $user->id, 'LOGIN_FAILED', null, ['hasil' => 'gagal', 'alasan' => 'totp']);
+                $audit->record('USERS', $user->id, 'LOGIN_FAILED:totp', null, ['hasil' => 'gagal', 'alasan' => 'totp']);
 
                 return null;
             }
@@ -67,7 +66,7 @@ class AuthController extends Controller
             RateLimiter::hit($key, config('security.login_lock_seconds'));
             RateLimiter::hit($ipKey, config('security.login_lock_seconds'));
 
-            return response()->json(['message' => 'NIP/email atau kata sandi salah.'], 401);
+            return response()->json(['message' => 'Kredensial tidak valid atau akun tidak dapat digunakan.'], 401);
         }
         RateLimiter::clear($key);
         Auth::guard('web')->login($user);
@@ -91,6 +90,7 @@ class AuthController extends Controller
      *
      * @throws ValidationException
      */
+    #[BodyParameter('password_confirmation', type: 'string', required: true)]
     public function register(Request $request, AuditService $audit): MeResource|JsonResponse
     {
         $validated = $request->validate([
@@ -129,7 +129,7 @@ class AuthController extends Controller
         $user = $request->user();
         $validated = $request->validate([
             'nama' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', Rule::unique('USERS', 'email_login')->ignore($user->id)],
+            'email' => ['required', 'email', 'max:255', Rule::unique('USERS', 'email_login')->ignore($user)],
             'nip' => ['nullable', 'string', 'regex:/^[0-9]{18}$/'],
             'jenis_kepegawaian' => ['nullable', 'string', 'max:255'],
         ]);
@@ -190,13 +190,8 @@ class AuthController extends Controller
     public function password(PasswordRequest $request, AuditService $audit): JsonResponse
     {
         $user = $request->user();
-        try {
-            app(\App\Contracts\FirebaseAuthGateway::class)->changePassword($user->email_login, (string) $request->input('current_password'), (string) $request->input('password'));
-        } catch (\App\Support\Firebase\FirebaseAuthException $exception) {
-            if ($exception->alasan === \App\Support\Firebase\FirebaseAuthException::KREDENSIAL_SALAH) {
-                throw ValidationException::withMessages(['current_password' => ['Password saat ini tidak sesuai.']]);
-            }
-            throw ValidationException::withMessages(['password' => ['Password Firebase tidak dapat diperbarui. Coba lagi nanti.']]);
+        if (! Hash::check((string) $request->input('current_password'), $user->password_hash)) {
+            throw ValidationException::withMessages(['current_password' => ['Password saat ini tidak sesuai.']]);
         }
         $user = DB::transaction(function () use ($request, $audit): User {
             $user = User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();

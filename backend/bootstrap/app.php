@@ -66,18 +66,5 @@ return Application::configure(basePath: dirname(__DIR__))
                 ], 422);
             }
         );
-
-        // Jangan bocorkan rincian exception atau aturan bisnis ke respons API.
-        $exceptions->render(
-            function (\Throwable $exception, Request $request) {
-                if (! $request->is('api/*') && ! $request->expectsJson()) {
-                    return null;
-                }
-
-                return response()->json([
-                    'message' => 'Permintaan tidak dapat diproses. Silakan coba lagi.',
-                ], 500);
-            }
-        );
     })
     ->create();

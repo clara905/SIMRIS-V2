@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\Role;
+use App\Models\Pegawai;
+use App\Models\PenempatanPegawai;
 use App\Models\User;
 use App\Models\UserRoleScope;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -55,6 +57,15 @@ function something()
 function grantRole(User $user, string $code, ?int $unit = null, array $dates = []): UserRoleScope
 {
     $role = Role::firstOrCreate(['kode' => $code], ['nama' => $code]);
+
+    if ($unit !== null && $user->pegawai_id === null) {
+        $pegawai = Pegawai::factory()->create();
+        $user->forceFill(['pegawai_id' => $pegawai->id])->save();
+        PenempatanPegawai::factory()->create([
+            'pegawai_id' => $pegawai->id,
+            'unit_id' => $unit,
+        ]);
+    }
 
     return UserRoleScope::factory()->create(['user_id' => $user->id, 'role_id' => $role->id, 'unit_id' => $unit, 'mulai' => now()->subDay(), ...$dates]);
 }

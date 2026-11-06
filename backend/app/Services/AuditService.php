@@ -7,7 +7,7 @@ namespace App\Services;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
-final class AuditService
+class AuditService
 {
     /**
      * Record an audit entry using the active transaction and bypass the read-only model.

@@ -31,7 +31,7 @@ class AuthController extends Controller
     ];
 
     /**
-     * Login memakai kredensial lokal; Firebase hanya memverifikasi email.
+     * Authenticate with Firebase, then establish a local Sanctum session.
      */
     public function login(
         FirebaseLoginRequest $request,

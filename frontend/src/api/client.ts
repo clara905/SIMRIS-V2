@@ -46,6 +46,25 @@ api.interceptors.response.use(
 
 export function errorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
+    const data: unknown = error.response?.data
+    if (typeof data === 'object' && data !== null) {
+      const response = data as Record<string, unknown>
+      const errors = response.errors
+      if (typeof errors === 'object' && errors !== null) {
+        const firstValidationMessage = Object.values(errors as Record<string, unknown>)
+          .flatMap((messages) => Array.isArray(messages) ? messages : [])
+          .find((message): message is string => typeof message === 'string')
+        if (firstValidationMessage) return firstValidationMessage
+      }
+
+      if (
+        typeof response.message === 'string' &&
+        response.message !== 'Permintaan tidak dapat diproses. Silakan coba lagi.'
+      ) {
+        return response.message
+      }
+    }
+
     return 'Permintaan tidak dapat diproses. Silakan coba lagi.'
   }
 

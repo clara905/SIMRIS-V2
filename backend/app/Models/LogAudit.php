@@ -29,6 +29,12 @@ class LogAudit extends Model
 
     protected static function booted(): void
     {
+        static::deleting(
+            fn () => throw new LogicException(
+                'Audit tidak dapat dihapus melalui model.'
+            )
+        );
+
         static::saving(
             fn () => throw new LogicException(
                 'Gunakan AuditService untuk menambah atau mengubah audit.'

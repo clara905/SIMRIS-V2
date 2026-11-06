@@ -11,9 +11,11 @@ use App\Models\UserRoleScope;
 use App\Services\AdminService;
 use App\Services\AuditService;
 use App\Services\ScopeUnit;
+use App\Contracts\FirebaseAuthGateway;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Tests\Support\FakeFirebaseAuthGateway;
 
 uses(LazilyRefreshDatabase::class);
 beforeEach(function (): void {
@@ -23,6 +25,12 @@ function adminActor(): User
 {
     $user = User::factory()->create();
     grantRole($user, 'SUPER_ADMIN');
+    $firebase = app(FirebaseAuthGateway::class);
+    if (! $firebase instanceof FakeFirebaseAuthGateway) {
+        $firebase = new FakeFirebaseAuthGateway();
+        app()->instance(FirebaseAuthGateway::class, $firebase);
+    }
+    $firebase->tambah($user->email_login, 'password-testing');
 
     return $user;
 }

@@ -17,15 +17,15 @@ class LoginTest extends TestCase
 
     private function login(array $payload = [])
     {
-        return $this->withHeaders(['Referer'=>'http://localhost'])->postJson('/api/v1/login', $payload + ['email'=>'budi@simris.test','password'=>'Rahasia#123','captcha_token'=>'token-sah']);
+        return $this->withHeaders(['Origin'=>'http://localhost:5173'])->postJson('/api/v1/login', $payload + ['email'=>'budi@simris.test','password'=>'Rahasia#123','captcha_token'=>'token-sah']);
     }
 
-    public function test_login_checks_local_hash_and_opens_sanctum_session(): void
+    public function test_login_authenticates_with_firebase_and_opens_sanctum_session(): void
     {
         $user=$this->buatPengguna();
         $this->login()->assertOk()->assertJsonPath('data.email','budi@simris.test')->assertJsonMissingPath('data.password_hash');
         $this->assertAuthenticatedAs($user,'web');
-        $this->assertSame(0,$this->firebase->percobaan);
+        $this->assertSame(1,$this->firebase->percobaan);
     }
 
     public function test_nip_can_be_used_for_login_and_wrong_credentials_are_generic(): void

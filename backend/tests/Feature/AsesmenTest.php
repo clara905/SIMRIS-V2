@@ -81,6 +81,10 @@ test('assessment creation requires running period frozen method and a unique act
     $f = asesmenFixture();
     $otherUnit = UnitOrganisasi::factory()->create();
     grantRole($f['user'], 'STAFF', $otherUnit->id);
+    DB::table('PENEMPATAN_PEGAWAI')
+        ->where('pegawai_id', $f['user']->pegawai_id)
+        ->where('utama', true)
+        ->update(['unit_id' => $otherUnit->id]);
     $payload = ['unit_id' => $otherUnit->id, 'periode_id' => $f['period']->id, 'versi_metode_id' => $f['method']->id, 'tujuan' => 'Tujuan', 'ruang_lingkup' => 'Lingkup'];
     $draft = VersiMetodeRisiko::factory()->create();
     $this->actingAs($f['user'])->postJson('/api/asesmen', [...$payload, 'versi_metode_id' => $draft->id])->assertConflict()->assertJsonPath('code', 'versi_belum_beku');
@@ -119,6 +123,10 @@ test('foreign unit and unrelated staff cannot mutate an assessment', function ()
     $this->actingAs($stranger)->getJson('/api/asesmen/'.$f['assessment']->id)->assertNotFound();
     $this->patchJson('/api/risiko/'.$f['risk']->id, ['skenario' => 'X'])->assertNotFound();
     grantRole($stranger, 'STAFF', $f['unit']->id);
+    DB::table('PENEMPATAN_PEGAWAI')
+        ->where('pegawai_id', $stranger->pegawai_id)
+        ->where('utama', true)
+        ->update(['unit_id' => $f['unit']->id]);
     $this->patchJson('/api/asesmen/'.$f['assessment']->id, ['tujuan' => 'X'])->assertForbidden();
 });
 test('initial assessments cannot bypass status or early freeze protection', function (): void {

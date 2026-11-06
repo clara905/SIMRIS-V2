@@ -23,8 +23,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function (): void {
     Route::get('/config', fn () => response()->json([
-        'recaptcha_site_key' => config('simris.captcha.site_key'),
-    ]));
+        'recaptcha_site_key' => (string) config('simris.captcha.site_key', ''),
+    ]))->name('api.v1.config');
 
     Route::post('/login', [AuthController::class, 'login'])
         ->middleware('throttle:login');
@@ -239,6 +239,5 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function (): void {
     }
     Route::get('/log-audit/ekspor', [$controller, 'export'])->defaults('resource', 'log-audit');
     Route::get('/log-audit', [$controller, 'index'])->defaults('resource', 'log-audit');
-    Route::delete('/log-audit/{id}', [$controller, 'destroy'])->whereNumber('id')->defaults('resource', 'log-audit');
     Route::get('/laporan/lampiran-14', [$controller, 'report'])->defaults('resource', 'lampiran-14');
 });
