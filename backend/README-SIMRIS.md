@@ -34,11 +34,14 @@ Atur `DB_DATABASE=simris_teman`, `DB_USERNAME`, dan `DB_PASSWORD` sesuai MySQL d
 SIMRIS_ADMIN_USERNAME=admin
 SIMRIS_ADMIN_EMAIL=admin@example.test
 SIMRIS_ADMIN_PASSWORD=
+SIMRIS_ADMIN_NIP=
+SIMRIS_ADMIN_NAME=
+SIMRIS_ADMIN_EMPLOYMENT_TYPE=PNS
 SIMRIS_DEMO_PASSWORD=
 ASET_UNIT_BAWAAN_KODE=SATKER-DEMO
 ```
 
-Isi password sendiri. `SIMRIS_DEMO_PASSWORD` hanya diperlukan jika `APP_ENV=local`. Tidak ada password bawaan. Semua akun yang dibuat seeder wajib mengganti password.
+Isi password sendiri. Untuk menautkan akun SUPER_ADMIN bootstrap ke identitas pegawai yang sama, isi `SIMRIS_ADMIN_NIP` dan `SIMRIS_ADMIN_NAME` dengan data yang benar pada `.env` lokal setiap laptop; seeder akan memakai pegawai dengan NIP tersebut jika sudah ada, atau membuatnya jika belum ada. `SIMRIS_ADMIN_EMPLOYMENT_TYPE` default-nya `PNS`. Jangan menaruh NIP atau data pribadi di berkas seeder/commit. Jika NIP tidak diisi, akun SUPER_ADMIN tetap dibuat tetapi tanpa tautan pegawai. `SIMRIS_DEMO_PASSWORD` hanya diperlukan jika `APP_ENV=local`. Tidak ada password bawaan. Semua akun yang dibuat seeder wajib mengganti password.
 
 ### Login Firebase pada laptop baru
 

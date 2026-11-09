@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Pegawai;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -71,18 +72,51 @@ class SimrisSeeder extends Seeder
             */
 
             $adminUsername = config('simris.admin.username');
+            $adminNip = config('simris.admin.nip');
+            $adminEmployee = null;
+
+            if ($adminNip !== null && $adminNip !== '') {
+                if (! is_string($adminNip) || ! preg_match('/^[0-9]{1,18}$/', $adminNip)) {
+                    throw new InvalidArgumentException('SIMRIS_ADMIN_NIP harus berisi 1 sampai 18 digit angka.');
+                }
+
+                $adminName = config('simris.admin.name');
+                if (! is_string($adminName) || trim($adminName) === '') {
+                    throw new InvalidArgumentException('Isi SIMRIS_ADMIN_NAME jika SIMRIS_ADMIN_NIP digunakan.');
+                }
+
+                $adminEmployee = Pegawai::query()->where('nip', $adminNip)->first();
+                if (! $adminEmployee) {
+                    $adminEmployee = Pegawai::query()->create([
+                        'nip' => $adminNip,
+                        'nama' => trim($adminName),
+                        'email_kontak' => config('simris.admin.email'),
+                        'jenis_kepegawaian' => config('simris.admin.employment_type', 'PNS'),
+                        'aktif' => true,
+                    ]);
+                }
+            }
 
             $admin = User::where('username', $adminUsername)->first();
 
             if (!$admin) {
 
                 $admin = User::create([
+                    'pegawai_id' => $adminEmployee?->id,
                     'username' => $adminUsername,
                     'email_login' => config('simris.admin.email'),
                     'password_hash' => config('simris.admin.password'),
                     'aktif' => true,
                     'wajib_ganti_password' => true,
                 ]);
+            } elseif ($adminEmployee) {
+                if ($admin->pegawai_id !== null && (int) $admin->pegawai_id !== (int) $adminEmployee->id) {
+                    throw new InvalidArgumentException('Akun SUPER_ADMIN yang sudah ada tertaut ke pegawai berbeda.');
+                }
+
+                if ($admin->pegawai_id === null) {
+                    $admin->forceFill(['pegawai_id' => $adminEmployee->id])->save();
+                }
             }
 
             $this->record(

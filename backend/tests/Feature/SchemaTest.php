@@ -99,6 +99,26 @@ test('base seeding is repeatable without exposing or resetting the initial passw
     expect($user->wajib_ganti_password)->toBeFalse();
 });
 
+test('bootstrap super admin can be linked to a configured employee identity', function (): void {
+    config([
+        'simris.admin.nip' => '999999999999999999',
+        'simris.admin.name' => 'Admin Super',
+        'simris.admin.employment_type' => 'PNS',
+    ]);
+
+    $this->seed(SimrisSeeder::class);
+
+    $employee = Pegawai::query()->where('nip', '999999999999999999')->firstOrFail();
+    $admin = User::query()->where('username', 'admin-test')->firstOrFail();
+
+    expect($employee->nama)->toBe('Admin Super');
+    expect($admin->pegawai_id)->toBe($employee->id);
+    $this->assertDatabaseHas('USER_ROLE_SCOPE', [
+        'user_id' => $admin->id,
+        'unit_id' => null,
+    ]);
+});
+
 test('missing initial credentials roll back seeding', function (): void {
     config(['simris.admin.password' => null]);
 
