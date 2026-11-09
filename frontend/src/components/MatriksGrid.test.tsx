@@ -26,8 +26,27 @@ it('menandai sel kosong dan mendukung pemilihan beberapa sel', async () => {
   )
   expect(select).toHaveBeenCalledWith('1-2')
 })
-it('matriks beku tidak mempunyai tombol pengubah', () => {
+it('matriks baca-saja tidak mempunyai tombol pengubah', () => {
   render(<MatriksGrid kemungkinan={scales} dampak={scales} tingkat={[]} cells={[]} readOnly />)
   expect(screen.queryAllByRole('button')).toHaveLength(0)
   expect(screen.getAllByText('Belum ditetapkan')).toHaveLength(4)
+})
+it('menampilkan jumlah risiko dan mendukung filter sel melalui keyboard', async () => {
+  const selectCell = vi.fn()
+  render(
+    <MatriksGrid
+      kemungkinan={scales}
+      dampak={scales}
+      tingkat={[]}
+      cells={[]}
+      counts={{ '1-2': 3 }}
+      onCellSelect={selectCell}
+      readOnly
+    />,
+  )
+  const cell = screen.getByRole('button', { name: 'Kemungkinan 1, dampak 2: Belum ditetapkan, 3 risiko' })
+  expect(screen.getByText('3 risiko')).toBeInTheDocument()
+  cell.focus()
+  await userEvent.keyboard('{Enter}')
+  expect(selectCell).toHaveBeenCalledWith('1-2')
 })

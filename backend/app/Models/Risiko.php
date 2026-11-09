@@ -16,7 +16,7 @@ class Risiko extends Model
 
     protected $table = 'RISIKO';
 
-    protected $fillable = ['asesmen_id', 'ancaman_id', 'kerentanan_id', 'area_dampak_id', 'pemilik_risiko_id', 'dibuat_oleh', 'kode', 'skenario', 'uraian_kerentanan', 'uraian_dampak', 'arah_dampak', 'dibuat_pada'];
+    protected $fillable = ['asesmen_id', 'ancaman_id', 'kerentanan_id', 'area_dampak_id', 'pemilik_risiko_id', 'dibuat_oleh', 'kode', 'skenario', 'uraian_kerentanan', 'uraian_dampak', 'arah_dampak', 'dibuat_pada', 'konteks', 'konsekuensi_kerahasiaan', 'konsekuensi_integritas', 'konsekuensi_ketersediaan', 'konsekuensi_kepatuhan', 'konsekuensi_operasional'];
 
     protected function casts(): array
     {

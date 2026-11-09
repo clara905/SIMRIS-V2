@@ -11,6 +11,9 @@ use App\Models\PenempatanPegawai;
 use App\Models\PenilaianRisiko;
 use App\Models\PeriodePenilaian;
 use App\Models\Risiko;
+use App\Models\SkalaDampak;
+use App\Models\SkalaKemungkinan;
+use App\Models\TingkatRisiko;
 use App\Models\UnitOrganisasi;
 use App\Models\User;
 use App\Models\UsulanKeputusan;
@@ -85,15 +88,45 @@ test('assessment creation requires running period frozen method and a unique act
         ->where('pegawai_id', $f['user']->pegawai_id)
         ->where('utama', true)
         ->update(['unit_id' => $otherUnit->id]);
-    $payload = ['unit_id' => $otherUnit->id, 'periode_id' => $f['period']->id, 'versi_metode_id' => $f['method']->id, 'tujuan' => 'Tujuan', 'ruang_lingkup' => 'Lingkup'];
-    $draft = VersiMetodeRisiko::factory()->create();
-    $this->actingAs($f['user'])->postJson('/api/asesmen', [...$payload, 'versi_metode_id' => $draft->id])->assertConflict()->assertJsonPath('code', 'versi_belum_beku');
+    $payload = ['periode_id' => $f['period']->id, 'tujuan' => 'Tujuan', 'ruang_lingkup' => 'Lingkup'];
+    $this->actingAs($f['user']);
     $expired = PeriodePenilaian::factory()->create(['tanggal_mulai' => today()->subYears(2), 'tanggal_selesai' => today()->subYear()]);
     $this->postJson('/api/asesmen', [...$payload, 'periode_id' => $expired->id])->assertConflict()->assertJsonPath('code', 'periode_tidak_berjalan');
-    $id = $this->postJson('/api/asesmen', $payload)->assertCreated()->assertJsonPath('data.status', 'DRAFT')->assertJsonPath('data.nomor_versi', 1)->json('data.id');
+    $id = $this->postJson('/api/asesmen', $payload)->assertCreated()->assertJsonPath('data.status', 'DRAFT')->assertJsonPath('data.nomor_versi', 1)->assertJsonPath('data.versi_metode_id', $f['method']->id)->json('data.id');
     $this->postJson('/api/asesmen', $payload)->assertConflict()->assertJsonPath('code', 'seri_aktif_sudah_ada');
     $this->assertDatabaseHas('LOG_AUDIT', ['entitas' => 'ASESMEN_RISIKO', 'entitas_id' => $id, 'aksi' => 'CREATE', 'user_id' => $f['user']->id]);
 });
+
+test('initial submission is closed outside its period', function (): void {
+    $f = asesmenFixture();
+    $f['period']->update(['tanggal_selesai' => today()->subDay()]);
+
+    $this->actingAs($f['user'])
+        ->patchJson('/api/asesmen/'.$f['assessment']->id, ['tujuan' => 'Draft terlambat'])
+        ->assertConflict()
+        ->assertJsonPath('code', 'periode_tidak_berjalan');
+
+    $this->postJson('/api/asesmen/'.$f['assessment']->id.'/ajukan')
+        ->assertConflict()
+        ->assertJsonPath('code', 'periode_tidak_berjalan')
+        ->assertJsonPath('message', 'Periode penilaian belum dibuka / sudah ditutup');
+});
+
+test('staff assessment register only lists assessments created by the current staff user', function (): void {
+    $f = asesmenFixture();
+    $other = User::factory()->create();
+    AsesmenRisiko::factory()->create([
+        'unit_id' => $f['unit']->id,
+        'dibuat_oleh' => $other->id,
+        'periode_id' => PeriodePenilaian::factory()->create([
+            'tanggal_mulai' => today()->subMonth(),
+            'tanggal_selesai' => today()->addMonth(),
+        ])->id,
+    ]);
+
+    $this->actingAs($f['user'])->getJson('/api/asesmen')->assertOk()->assertJsonCount(1, 'data');
+});
+
 test('Kasub may create a draft only in its own subbidang scope', function (): void {
     $f = asesmenFixture('KASUB');
     DB::table('ASESMEN_RISIKO')->where('id', $f['assessment']->id)->update(['status' => 'DITOLAK']);
@@ -144,6 +177,28 @@ test('foreign unit and unrelated staff cannot mutate an assessment', function ()
         ->update(['unit_id' => $f['unit']->id]);
     $this->patchJson('/api/asesmen/'.$f['assessment']->id, ['tujuan' => 'X'])->assertForbidden();
 });
+test('risk map returns method and stage data only within the assessment scope', function (): void {
+    $f = asesmenFixture();
+    $outside = asesmenFixture();
+    $cell = MatriksRisiko::where('versi_metode_id', $f['method']->id)->firstOrFail();
+    $this->actingAs($f['user']);
+    $this->postJson('/api/risiko/'.$f['risk']->id.'/penilaian', [
+        'matriks_id' => $cell->id,
+        'tahap' => 'SAAT_INI',
+        'alasan_kemungkinan' => 'Alasan',
+        'alasan_dampak' => 'Alasan',
+        'kesimpulan' => 'Kesimpulan',
+    ])->assertCreated();
+    $this->getJson('/api/asesmen/'.$f['assessment']->id.'/peta-risiko')
+        ->assertOk()
+        ->assertJsonPath('data.asesmen.id', $f['assessment']->id)
+        ->assertJsonPath('data.metode.profil_penilaian', false)
+        ->assertJsonCount(1, 'data.metode.matriks')
+        ->assertJsonPath('data.peta.SAAT_INI.'.$cell->id.'.jumlah', 1)
+        ->assertJsonPath('data.peta.SAAT_INI.'.$cell->id.'.risiko_ids.0', $f['risk']->id)
+        ->assertJsonPath('data.risiko.0.id', $f['risk']->id);
+    $this->getJson('/api/asesmen/'.$outside['assessment']->id.'/peta-risiko')->assertNotFound();
+});
 test('initial assessments cannot bypass status or early freeze protection', function (): void {
     $f = asesmenFixture();
     $this->actingAs($f['user'])->patchJson('/api/asesmen/'.$f['assessment']->id, ['status' => 'DISAHKAN'])->assertUnprocessable();
@@ -165,6 +220,92 @@ test('ratings update the same initial stage and proposals follow current rating'
     $this->postJson('/api/risiko/'.$f['risk']->id.'/usulan-keputusan', ['keputusan' => 'MITIGASI', 'alasan' => 'B'])->assertOk();
     expect(PenilaianRisiko::count())->toBe(1);
     expect(UsulanKeputusan::count())->toBe(1);
+});
+test('profile assessments require a reason for higher targets and an RTP for high risks', function (): void {
+    $f = asesmenFixture();
+    $method = VersiMetodeRisiko::factory()->create(['profil_penilaian' => true]);
+    DB::table('ASESMEN_RISIKO')->where('id', $f['assessment']->id)->update(['versi_metode_id' => $method->id]);
+    $low = TingkatRisiko::factory()->create(['versi_metode_id' => $method->id, 'kode' => 'RENDAH', 'nama' => 'Rendah', 'batas_min_skor' => 1, 'batas_max_skor' => 4, 'perlu_rtp' => false, 'perlu_persetujuan_pemilik' => false, 'kriteria_penerimaan' => 'Dapat diterima']);
+    $medium = TingkatRisiko::factory()->create(['versi_metode_id' => $method->id, 'kode' => 'SEDANG', 'nama' => 'Sedang', 'batas_min_skor' => 5, 'batas_max_skor' => 9, 'perlu_rtp' => false, 'perlu_persetujuan_pemilik' => true, 'kriteria_penerimaan' => 'Persetujuan pemilik risiko']);
+    $high = TingkatRisiko::factory()->create(['versi_metode_id' => $method->id, 'kode' => 'TINGGI', 'nama' => 'Tinggi', 'batas_min_skor' => 10, 'batas_max_skor' => 16, 'perlu_rtp' => true, 'perlu_persetujuan_pemilik' => false, 'kriteria_penerimaan' => 'RTP wajib']);
+    TingkatRisiko::factory()->create(['versi_metode_id' => $method->id, 'kode' => 'SANGAT_TINGGI', 'nama' => 'Sangat Tinggi', 'batas_min_skor' => 17, 'batas_max_skor' => 25, 'perlu_rtp' => true, 'perlu_persetujuan_pemilik' => false, 'kriteria_penerimaan' => 'RTP wajib']);
+    $possibilities = collect(range(1, 5))->mapWithKeys(fn (int $value): array => [
+        $value => SkalaKemungkinan::factory()->create(['versi_metode_id' => $method->id, 'nilai' => $value]),
+    ]);
+    $impacts = collect(range(1, 5))->mapWithKeys(fn (int $value): array => [
+        $value => SkalaDampak::factory()->create(['versi_metode_id' => $method->id, 'nilai' => $value]),
+    ]);
+    $matrix = collect();
+    foreach (range(1, 5) as $likelihood) {
+        foreach (range(1, 5) as $impactValue) {
+            $score = $likelihood * $impactValue;
+            $level = match (true) {
+                $score <= 4 => $low,
+                $score <= 9 => $medium,
+                $score <= 16 => $high,
+                default => TingkatRisiko::where('versi_metode_id', $method->id)->where('kode', 'SANGAT_TINGGI')->firstOrFail(),
+            };
+            $matrix->put("$likelihood-$impactValue", MatriksRisiko::factory()->create([
+                'versi_metode_id' => $method->id,
+                'kemungkinan_id' => $possibilities[$likelihood]->id,
+                'dampak_id' => $impacts[$impactValue]->id,
+                'tingkat_risiko_id' => $level->id,
+                'skor' => $score,
+            ]));
+        }
+    }
+
+    $this->actingAs($f['user']);
+    foreach (range(1, 5) as $likelihood) {
+        foreach (range(1, 5) as $impactValue) {
+            $this->postJson('/api/risiko/'.$f['risk']->id.'/penilaian', [
+                'kemungkinan_nilai' => $likelihood,
+                'dampak_nilai' => $impactValue,
+                'tahap' => 'SAAT_INI',
+                'alasan_kemungkinan' => 'Alasan',
+                'alasan_dampak' => 'Alasan',
+                'kesimpulan' => 'Matriks 5x5',
+            ])->assertSuccessful()
+                ->assertJsonPath('data.skor', $score = $likelihood * $impactValue)
+                ->assertJsonPath('data.tingkat.nama', match (true) {
+                    $score <= 4 => 'Rendah',
+                    $score <= 9 => 'Sedang',
+                    $score <= 16 => 'Tinggi',
+                    default => 'Sangat Tinggi',
+                })
+                ->assertJsonPath('data.perlu_rtp', $score >= 10)
+                ->assertJsonPath('data.matriks_id', $matrix->get("$likelihood-$impactValue")->id);
+        }
+    }
+    $rating = [
+        'kemungkinan_nilai' => 1,
+        'dampak_nilai' => 1,
+        'tahap' => 'SAAT_INI',
+        'alasan_kemungkinan' => 'Alasan',
+        'alasan_dampak' => 'Alasan',
+        'kesimpulan' => 'Risiko awal',
+    ];
+    $this->postJson('/api/risiko/'.$f['risk']->id.'/penilaian', $rating)->assertOk();
+    $this->postJson('/api/risiko/'.$f['risk']->id.'/penilaian', [...$rating, 'kemungkinan_nilai' => 0])->assertUnprocessable();
+    $this->postJson('/api/risiko/'.$f['risk']->id.'/penilaian', [...$rating, 'dampak_nilai' => 6])->assertUnprocessable();
+    $target = ['kemungkinan_nilai' => 2, 'dampak_nilai' => 3, 'tahap' => 'TARGET_SETELAH', 'alasan_kemungkinan' => 'Alasan', 'alasan_dampak' => 'Alasan', 'kesimpulan' => 'Target'];
+    $this->postJson('/api/risiko/'.$f['risk']->id.'/penilaian', $target)->assertConflict()->assertJsonPath('code', 'alasan_perubahan_level_diperlukan');
+    $this->postJson('/api/risiko/'.$f['risk']->id.'/penilaian', [...$target, 'alasan_perubahan_level' => 'Perubahan didukung analisis'])->assertCreated();
+    $this->postJson('/api/risiko/'.$f['risk']->id.'/penilaian', [
+        'kemungkinan_nilai' => 4,
+        'dampak_nilai' => 3,
+        'tahap' => 'SAAT_INI',
+        'alasan_kemungkinan' => 'Alasan',
+        'alasan_dampak' => 'Alasan',
+        'kesimpulan' => 'Risiko tinggi',
+    ])->assertOk();
+    $this->postJson('/api/risiko/'.$f['risk']->id.'/usulan-keputusan', ['keputusan' => 'TERIMA', 'alasan' => 'Alasan'])->assertConflict()->assertJsonPath('code', 'rtp_wajib');
+    $this->postJson('/api/risiko/'.$f['risk']->id.'/usulan-keputusan', ['keputusan' => 'MITIGASI', 'alasan' => 'RTP diperlukan'])->assertCreated();
+    $highMatrixId = $matrix->get('4-3')->id;
+    $this->getJson('/api/asesmen/'.$f['assessment']->id.'/peta-risiko')
+        ->assertOk()
+        ->assertJsonPath('data.peta.SAAT_INI.'.$highMatrixId.'.jumlah', 1)
+        ->assertJsonPath('data.peta.SAAT_INI.'.$highMatrixId.'.risiko_ids.0', $f['risk']->id);
 });
 test('draft risk and unused snapshot can be deleted but linked snapshot cannot', function (): void {
     $f = asesmenFixture();

@@ -19,7 +19,7 @@ const blankSop: SopForm = { unit_pemilik_id: '', kode: '', judul: '' }
 export function KelolaKepatuhan() {
   const [tab, setTab] = useState<'control' | 'sop'>('control')
   return <>
-    <div className="ws-page-heading"><div><span className="ws-eyebrow">Pengelolaan satker</span><h1>SOP &amp; kontrol internal</h1><p>Kelola kontrol internal, dokumen SOP, tautan, dan pengajuan untuk ditinjau.</p></div></div>
+    <div className="ws-page-heading"><div><span className="ws-eyebrow">Kontrol &amp; kepatuhan · Admin Satker</span><h1>SOP &amp; kontrol internal</h1><p>Kelola kontrol internal dan SOP dalam satu tempat. Tab ini menyediakan CRUD data dan tautan ke kontrol standar serta versi SOP.</p></div></div>
     <div className="ws-tabs" role="tablist" aria-label="Modul kepatuhan"><button role="tab" aria-selected={tab === 'control'} onClick={() => setTab('control')}>Kontrol internal</button><button role="tab" aria-selected={tab === 'sop'} onClick={() => setTab('sop')}>SOP</button></div>
     {tab === 'control' ? <KontrolInternal /> : <SopManagement />}
   </>

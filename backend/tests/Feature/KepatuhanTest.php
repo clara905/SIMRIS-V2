@@ -147,6 +147,7 @@ test('SOP linking requires approved versions and matching internal control pivot
     DB::table('SOP_VERSI')->where('id', $f['sopVersion']->id)->update(['status' => 'DISAHKAN']);
     $this->postJson('/api/kontrol-internal/'.$f['internal']->id.'/standar', ['kontrol_id' => $f['control']->id, 'keterangan' => 'Acuan'])->assertCreated();
     $this->postJson('/api/kontrol-internal/'.$f['internal']->id.'/sop', $sopPayload)->assertCreated();
+    $this->actingAs($f['actors']['STAFF']);
     $this->postJson('/api/risiko/'.$risk->id.'/sop', [...$sopPayload, 'kontrol_internal_id' => $f['internal']->id])->assertConflict();
     $this->postJson('/api/risiko/'.$risk->id.'/kontrol-internal', ['kontrol_internal_id' => $f['internal']->id, 'status_penerapan' => 'DITERAPKAN', 'kondisi_penerapan' => 'Sesuai', 'diperiksa_pada' => now()->toIso8601String()])->assertCreated();
     $this->postJson('/api/risiko/'.$risk->id.'/sop', [...$sopPayload, 'kontrol_internal_id' => $f['internal']->id])->assertCreated();
@@ -227,8 +228,10 @@ test('linked SOP references cannot be orphaned and pivot filters use an allowlis
     $risk = Risiko::factory()->create(['asesmen_id' => $assessment->id]);
     $this->actingAs($f['actors']['ADMIN_SATKER']);
     $this->postJson('/api/kontrol-internal/'.$f['internal']->id.'/sop', ['sop_versi_id' => $f['sopVersion']->id])->assertCreated();
+    $this->actingAs($f['actors']['STAFF']);
     $this->postJson('/api/risiko/'.$risk->id.'/kontrol-internal', ['kontrol_internal_id' => $f['internal']->id, 'status_penerapan' => 'DITERAPKAN', 'kondisi_penerapan' => 'Sesuai', 'diperiksa_pada' => now()->toIso8601String()])->assertCreated();
     $this->postJson('/api/risiko/'.$risk->id.'/sop', ['kontrol_internal_id' => $f['internal']->id, 'sop_versi_id' => $f['sopVersion']->id])->assertCreated();
+    $this->actingAs($f['actors']['ADMIN_SATKER']);
     $this->deleteJson('/api/kontrol-internal/'.$f['internal']->id.'/sop', ['sop_versi_id' => $f['sopVersion']->id])->assertConflict();
     $this->getJson('/api/kontrol-internal/'.$f['internal']->id.'/sop?sort=unknown')->assertUnprocessable();
     $this->getJson('/api/kontrol-internal/'.$f['internal']->id.'/sop?filter[sop_versi_id]='.$f['sopVersion']->id)->assertOk()->assertJsonCount(1, 'data');

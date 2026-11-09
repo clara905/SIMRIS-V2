@@ -18,7 +18,7 @@ class KeputusanService
         foreach (Risiko::where('asesmen_id', $assessment->id)->get() as $risk) {
             $current = PenilaianRisiko::where('risiko_id', $risk->id)->where('tahap', 'SAAT_INI')->latest('id')->firstOrFail();
             $proposal = UsulanKeputusan::where('penilaian_id', $current->id)->latest('id')->firstOrFail();
-            $rating = $proposal->keputusan === 'MITIGASI' ? PenilaianRisiko::where('risiko_id', $risk->id)->where('tahap', 'AKTUAL_SETELAH')->latest('id')->first() : $current;
+            $rating = in_array($proposal->keputusan, ['MODIFIKASI', 'MITIGASI'], true) ? PenilaianRisiko::where('risiko_id', $risk->id)->where('tahap', 'AKTUAL_SETELAH')->latest('id')->first() : $current;
             if (! $rating) {
                 throw new BusinessRuleException('residual_belum_lengkap', 'Penilaian keputusan belum tersedia.');
             }

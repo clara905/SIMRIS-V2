@@ -215,6 +215,35 @@ class OpenApiResponses extends ResponseExtension
 
             return;
         }
+        if ($controller === 'AsesmenController' && $method === 'riskMap') {
+            $rating = clone $this->model(Models\PenilaianRisiko::class)->resolve()->type;
+            $rating->addProperty('matriks', $this->model(Models\MatriksRisiko::class)->nullable(true));
+            $rating->addProperty('tingkat', $this->model(Models\TingkatRisiko::class)->nullable(true));
+            $rating->addProperty('kemungkinan', $this->model(Models\SkalaKemungkinan::class)->nullable(true));
+            $rating->addProperty('dampak', $this->model(Models\SkalaDampak::class)->nullable(true));
+            $risk = clone $this->model(Models\Risiko::class)->resolve()->type;
+            $risk->addProperty('penilaian', $this->list($rating));
+            $risk->addProperty('usulan_keputusan', $this->list($this->model(Models\UsulanKeputusan::class)));
+            $methodData = $this->object([
+                'id' => new IntegerType,
+                'nama' => new StringType,
+                'versi' => new StringType,
+                'referensi' => new StringType,
+                'profil_penilaian' => new BooleanType,
+                'kemungkinan' => $this->list($this->model(Models\SkalaKemungkinan::class)),
+                'dampak' => $this->list($this->model(Models\SkalaDampak::class)),
+                'tingkat' => $this->list($this->model(Models\TingkatRisiko::class)),
+                'matriks' => $this->list($this->model(Models\MatriksRisiko::class)),
+            ], ['id', 'nama', 'versi', 'referensi', 'profil_penilaian', 'kemungkinan', 'dampak', 'tingkat', 'matriks']);
+            $payload = $this->object([
+                'asesmen' => $this->model(Models\AsesmenRisiko::class),
+                'metode' => $methodData,
+                'risiko' => $this->list($risk),
+            ], ['asesmen', 'metode', 'risiko']);
+            $this->add($operation, 200, $this->object(['data' => $payload], ['data']), 'Asesmen, metode, matriks, dan penilaian di dalam scope unit.');
+
+            return;
+        }
         $class = $this->rowClass($resource);
         if ($controller === 'AsesmenWorkflowController') {
             $class = $method === 'reviews' ? Models\ReviewAsesmen::class : Models\AsesmenRisiko::class;

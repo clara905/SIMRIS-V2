@@ -6,11 +6,14 @@ use App\Exceptions\BusinessRuleException;
 use App\Models\Pegawai;
 use App\Models\PenempatanPegawai;
 use App\Models\PeriodePenilaian;
+use App\Models\AsesmenRisiko;
 use App\Models\RencanaKerja;
 use App\Models\Role;
+use App\Models\Soa;
 use App\Models\User;
 use App\Models\UserRoleScope;
 use App\Models\UnitOrganisasi;
+use App\Support\TextSearch;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -91,6 +94,7 @@ class AdminService
             }
             $query->where($field, $value);
         }
+        TextSearch::apply($query, $input['q'] ?? null, $allowed);
         $sort = $input['sort'] ?? 'id';
         $column = ltrim($sort, '-');
         if (! in_array($column, [...$allowed, 'created_at', 'updated_at'], true)) {
@@ -226,9 +230,25 @@ class AdminService
                     }
                 }
                 if ($resource === 'periode-penilaian') {
+                    PeriodePenilaian::query()->lockForUpdate()->get(['id']);
                     $values = [...$before, ...$data];
                     if (isset($values['tanggal_mulai'], $values['tanggal_selesai']) && Carbon::parse($values['tanggal_selesai'])->lt(Carbon::parse($values['tanggal_mulai']))) {
                         throw new BusinessRuleException('rentang_tanggal_tidak_valid', 'Tanggal selesai tidak boleh sebelum tanggal mulai.');
+                    }
+                    if ($action === 'delete' && (AsesmenRisiko::where('periode_id', $model->id)->exists() || Soa::where('periode_id', $model->id)->exists())) {
+                        throw new BusinessRuleException('periode_sudah_dipakai', 'Periode tidak dapat dihapus karena sudah dipakai asesmen atau dokumen kepatuhan.');
+                    }
+                    if ($action !== 'delete' && isset($values['tanggal_mulai'], $values['tanggal_selesai'])) {
+                        $start = Carbon::parse($values['tanggal_mulai'])->toDateString();
+                        $end = Carbon::parse($values['tanggal_selesai'])->toDateString();
+                        $overlap = PeriodePenilaian::query()
+                            ->when($model->exists, fn ($query) => $query->where('id', '!=', $model->id))
+                            ->whereDate('tanggal_mulai', '<=', $end)
+                            ->whereDate('tanggal_selesai', '>=', $start)
+                            ->exists();
+                        if ($overlap) {
+                            throw new BusinessRuleException('periode_tumpang_tindih', 'Rentang periode penilaian tidak boleh tumpang tindih.');
+                        }
                     }
                 }
                 $roleScopeAudit = $resource === 'user-role-scope';

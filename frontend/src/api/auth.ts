@@ -4,6 +4,7 @@ import type { components } from './schema'
 export type SessionUser = components['schemas']['SessionUser'] & {
   roleCodes?: string[]
   unitIds?: number[]
+  unitIdsByRole?: Record<string, number[]>
   username?: string
   pegawai?: {
     id: number
@@ -38,6 +39,10 @@ export function normalizeSession(data: SessionUser | BackendSession | LaravelSes
       role: data.peran.map((role) => role.nama).join(', ') || 'Tanpa role aktif',
       roleCodes: data.peran.map((role) => role.kode),
       unitIds: [...new Set(data.peran.flatMap((role) => (role.unit ? [role.unit.id] : [])))],
+      unitIdsByRole: data.peran.reduce<Record<string, number[]>>((scopes, role) => {
+        if (role.unit) scopes[role.kode] = [...new Set([...(scopes[role.kode] ?? []), role.unit.id])]
+        return scopes
+      }, {}),
     }
   }
   if (!('user' in data)) return data
@@ -50,6 +55,10 @@ export function normalizeSession(data: SessionUser | BackendSession | LaravelSes
     wajib_ganti_password: data.user.wajib_ganti_password,
     role: data.roles.map((role) => role.nama).join(', ') || 'Tanpa role aktif',
     roleCodes: data.roles.map((role) => role.kode),
+    unitIdsByRole: data.roles.reduce<Record<string, number[]>>((scopes, role) => {
+      if (role.unit_id !== null) scopes[role.kode] = [...new Set([...(scopes[role.kode] ?? []), role.unit_id])]
+      return scopes
+    }, {}),
     unitIds: [
       ...new Set(data.roles.flatMap((role) => (role.unit_id === null ? [] : [role.unit_id]))),
     ],

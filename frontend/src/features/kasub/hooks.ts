@@ -1,11 +1,12 @@
-/** Query key review asesmen Kasub; endpoint dipasang setelah B1 tersedia. */
+/** Query key untuk antrean review asesmen Kasub. */
 export const kasubReviewKeys = {
   root: ['kasub-review'] as const,
-  assessments: (scope: 'menunggu-saya' | 'semua-unit') => [...kasubReviewKeys.root, 'asesmen', scope] as const,
+  assessments: (scope: string) => [...kasubReviewKeys.root, 'asesmen', scope] as const,
 }
 
 export const statusAsesmenKasub = [
-  { kode: 'DRAFT', label: 'Draft', mencakup: ['DRAFT', 'MENUNGGU_KASUB', 'RESIDUAL_DRAFT'] },
+  { kode: 'DRAFT', label: 'Draft', mencakup: ['DRAFT', 'RESIDUAL_DRAFT'] },
+  { kode: 'MENUNGGU_KASUB', label: 'Menunggu review Kasub', mencakup: ['MENUNGGU_KASUB'] },
   { kode: 'MENUNGGU_KABID', label: 'Menunggu persetujuan Kabid', mencakup: ['MENUNGGU_KABID', 'VERIFIKASI_KABID'] },
   { kode: 'DISAHKAN', label: 'Disahkan', mencakup: ['DISAHKAN'] },
   { kode: 'DITOLAK', label: 'Ditolak', mencakup: ['DITOLAK'] },

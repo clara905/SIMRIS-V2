@@ -3,6 +3,7 @@
 use App\Models\Pegawai;
 use App\Models\PenempatanPegawai;
 use App\Models\PeriodePenilaian;
+use App\Models\AsesmenRisiko;
 use App\Models\RencanaKerja;
 use App\Models\Role;
 use App\Models\UnitOrganisasi;
@@ -38,6 +39,32 @@ function adminSession(User $user): mixed
 {
     return test()->actingAs($user)->withSession(['auth.password_confirmed_at' => now()->timestamp]);
 }
+test('periods must have ordered non-overlapping dates and cannot be deleted after use', function (): void {
+    $admin = adminActor();
+    $used = PeriodePenilaian::factory()->create([
+        'tanggal_mulai' => '2030-01-01',
+        'tanggal_selesai' => '2030-01-31',
+    ]);
+    $unused = PeriodePenilaian::factory()->create([
+        'tanggal_mulai' => '2030-03-01',
+        'tanggal_selesai' => '2030-03-31',
+    ]);
+    AsesmenRisiko::factory()->create(['periode_id' => $used->id]);
+
+    adminSession($admin)->postJson('/api/periode-penilaian', [
+        'nama' => 'Periode tumpang tindih',
+        'tanggal_mulai' => '2030-01-31',
+        'tanggal_selesai' => '2030-02-15',
+    ])->assertConflict()->assertJsonPath('code', 'periode_tumpang_tindih');
+
+    $this->patchJson('/api/periode-penilaian/'.$unused->id, [
+        'tanggal_mulai' => '2030-04-01',
+        'tanggal_selesai' => '2030-03-31',
+    ])->assertConflict()->assertJsonPath('code', 'rentang_tanggal_tidak_valid');
+    $this->deleteJson('/api/periode-penilaian/'.$used->id)
+        ->assertConflict()->assertJsonPath('code', 'periode_sudah_dipakai');
+    $this->deleteJson('/api/periode-penilaian/'.$unused->id)->assertOk();
+});
 test('super admin can create, edit, move, and delete organization units at each valid level', function (): void {
     $super = adminActor();
     $root = adminSession($super)->postJson('/api/unit-organisasi', [
@@ -378,7 +405,7 @@ test('NIP accepts one to eighteen digits and is masked until password confirmati
         'email' => $employee->email_kontak,
         'nip' => 'nip-tidak-valid',
     ])->assertUnprocessable()->assertJsonValidationErrors('nip');
-    $response = $this->actingAs($admin)->getJson('/api/pegawai?filter[nama]='.$employee->nama)
+    $response = $this->actingAs($admin)->getJson('/api/pegawai?q='.rawurlencode($employee->nama))
         ->assertOk()
         ->assertJsonPath('data.0.nip_tersedia', true)
         ->assertJsonPath('data.0.nip', str_repeat('•', 18));
@@ -428,6 +455,18 @@ test('removing another super grant leaves an active super admin and invalidates 
     expect(app(ScopeUnit::class)->isSuper($admin))->toBeTrue();
     expect(app(ScopeUnit::class)->isSuper($other))->toBeFalse();
     $this->assertDatabaseMissing('USER_ROLE_SCOPE', ['id' => $scope->id]);
+});
+
+test('administrative listings search by text instead of numeric identifiers', function (): void {
+    $admin = adminActor();
+    Pegawai::factory()->create(['nama' => 'Pegawai Kata Kunci']);
+    Pegawai::factory()->create(['nama' => 'Pegawai Lain']);
+
+    $this->actingAs($admin)
+        ->getJson('/api/pegawai?q=Kata%20Kunci')
+        ->assertOk()
+        ->assertJsonPath('meta.total', 1)
+        ->assertJsonPath('data.0.nama', 'Pegawai Kata Kunci');
 });
 
 test('editing role dates preserves nonoverlap and can revoke another users scope', function (): void {

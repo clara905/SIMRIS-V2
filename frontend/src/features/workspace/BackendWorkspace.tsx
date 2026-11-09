@@ -45,6 +45,7 @@ import './workspace.css'
 
 const ReviewAsesmenPage = lazy(() => import('../kasub/ReviewAsesmenPage').then((module) => ({ default: module.ReviewAsesmenPage })))
 const BuatAsesmenPage = lazy(() => import('../kasub/BuatAsesmenPage').then((module) => ({ default: module.BuatAsesmenPage })))
+const AsesmenDetailPage = lazy(() => import('../kasub/AsesmenDetailPage').then((module) => ({ default: module.AsesmenDetailPage })))
 
 type Row = Record<string, unknown> & { id: number }
 type Page = {
@@ -125,6 +126,7 @@ export function BackendWorkspace() {
   const client = useQueryClient()
   const navigate = useNavigate()
   const location = useLocation()
+  const assessmentPath = location.pathname.match(/^\/asesmen\/(\d+)$/)
   const [mobile, setMobile] = useState(false)
   const [leaving, setLeaving] = useState(false)
   const [logoutConfirm, setLogoutConfirm] = useState(false)
@@ -135,11 +137,14 @@ export function BackendWorkspace() {
   const isSatkerAdmin = roleCodes.includes('ADMIN_SATKER') && !roleCodes.includes('SUPER_ADMIN')
   const isKasubOnly = roleCodes.includes('KASUB') && !roleCodes.some((role) => ['SUPER_ADMIN', 'ADMIN_SATKER'].includes(role))
   const isKabidOnly = roleCodes.includes('KABID') && !roleCodes.some((role) => ['SUPER_ADMIN', 'ADMIN_SATKER'].includes(role))
+  const isStaffOnly = roleCodes.includes('STAFF') && !roleCodes.some((role) => ['SUPER_ADMIN', 'ADMIN_SATKER', 'KASATKER', 'KABID', 'KASUB'].includes(role))
   const satkerUnit = useSatkerUnit()
   const allowed = modules
     .filter(
       (m) =>
       !(isSatkerAdmin && ['Referensi', 'Organisasi'].includes(m.group)) &&
+      !(isSatkerAdmin && m.path === '/kepatuhan') &&
+      !(isStaffOnly && m.path === '/monitoring') &&
       !(isKasubOnly && m.path === '/pegawai') &&
       (!m.admin || roleCodes.includes('SUPER_ADMIN')) &&
       (!m.roles || m.roles.some((r) => roleCodes.includes(r))),
@@ -254,6 +259,10 @@ export function BackendWorkspace() {
             <ChevronRight size={14} aria-hidden="true" />
             {location.pathname === '/profil' ? (
               <strong>Profil</strong>
+            ) : assessmentPath ? (
+              <Link to={location.pathname} aria-current="page" className="ws-breadcrumb-current">
+                Risk Assessment #{assessmentPath[1]}
+              </Link>
             ) : active ? (
               <Link to={active.path} aria-current="page" className="ws-breadcrumb-current">
                 {active.label}
@@ -302,6 +311,8 @@ export function BackendWorkspace() {
         <main id="workspace-content" className="ws-content" tabIndex={-1}>
           {location.pathname === '/profil' ? (
             <Profile session={session.data} />
+          ) : assessmentPath ? (
+            <AsesmenDetailPage assessmentId={Number(assessmentPath[1])} />
           ) : !active ? (
             <section className="ws-panel ws-empty">
               <h1>Halaman tidak tersedia</h1>
@@ -1000,24 +1011,25 @@ function Registry({ resources }: { resources: Resource[] }) {
     : (resource.statuses ?? []).map((value) => ({ value, label: value }))
   const page = Math.max(1, Number(params.get('page')) || 1)
   const rawStatus = params.get('status') || ''
+  const recordId = params.get('id') || ''
   const status = isKasubAssessment
     ? statusAsesmenKasub.find((item) => item.mencakup.includes(rawStatus as never))?.kode || rawStatus
     : rawStatus
-  const id = params.get('id') || ''
-  const [idDraft, setIdDraft] = useState(id)
+  const search = params.get('q') || ''
+  const [searchDraft, setSearchDraft] = useState(search)
   const [selected, setSelected] = useState<Row | null>(null)
   const [auditToDelete, setAuditToDelete] = useState<Row | null>(null)
   const [deletingAudit, setDeletingAudit] = useState(false)
   const filter = {
     ...(resource.defaultFilter || {}),
-    ...(id ? { id } : {}),
+    ...(recordId ? { id: recordId } : {}),
     ...(status && statusOptions.some((option) => option.value === status)
       ? { [isKasubAssessment ? 'status_kasub' : resource.statusField || 'status']: status }
       : {}),
   }
   const query = useQuery({
-    queryKey: ['workspace', 'list', resource.endpoint, page, filter],
-    queryFn: ({ signal }) => getPage(resource.endpoint, { page, filter, sort: '-id' }, signal),
+    queryKey: ['workspace', 'list', resource.endpoint, page, search, filter],
+    queryFn: ({ signal }) => getPage(resource.endpoint, { page, q: search || undefined, filter, sort: '-id' }, signal),
   })
   function update(values: Record<string, string>) {
     const next = new URLSearchParams(params)
@@ -1035,7 +1047,7 @@ function Registry({ resources }: { resources: Resource[] }) {
             aria-pressed={r.key === resource.key}
             onClick={() => {
               setParams({ tab: r.key })
-              setIdDraft('')
+              setSearchDraft('')
               setSelected(null)
             }}
           >
@@ -1048,19 +1060,17 @@ function Registry({ resources }: { resources: Resource[] }) {
           <form
             onSubmit={(e) => {
               e.preventDefault()
-              update({ id: idDraft, page: '' })
+              update({ q: searchDraft, page: '' })
             }}
             className="ws-filter"
           >
             <Search size={17} />
             <input
-              aria-label="Cari berdasarkan ID"
-              type="number"
-              min="1"
-              step="1"
-              placeholder="Cari berdasarkan ID..."
-              value={idDraft}
-              onChange={(e) => setIdDraft(e.target.value)}
+              aria-label="Cari berdasarkan teks"
+              type="search"
+              placeholder="Cari nama, kode, atau keterangan..."
+              value={searchDraft}
+              onChange={(e) => setSearchDraft(e.target.value)}
             />
             <button type="submit">Cari</button>
           </form>
@@ -1076,10 +1086,10 @@ function Registry({ resources }: { resources: Resource[] }) {
               ))}
             </select>
           )}
-          {(id || status) && (
+          {(search || status || recordId) && (
             <button
               onClick={() => {
-                setIdDraft('')
+                setSearchDraft('')
                 setParams({ tab: resource.key })
               }}
             >
@@ -1098,7 +1108,8 @@ function Registry({ resources }: { resources: Resource[] }) {
             <button
               onClick={() =>
                 void download(
-                  '/api/log-audit/ekspor' + (id ? '?filter[id]=' + encodeURIComponent(id) : ''),
+                  '/api/log-audit/ekspor' +
+                    (search ? '?q=' + encodeURIComponent(search) : ''),
                   'log-audit.csv',
                 )
               }
@@ -1222,7 +1233,18 @@ function Registry({ resources }: { resources: Resource[] }) {
         description="Rincian data tersimpan dan dokumen terkait."
       >
         {selected && (
-          <RecordDetail key={resource.key + selected.id} row={selected} resource={resource} />
+          <>
+            <RecordDetail key={resource.key + selected.id} row={selected} resource={resource} />
+            {resource.key === 'asesmen' && (
+              <Link
+                className="ws-drawer-assessment-link"
+                to={`/asesmen/${selected.id}`}
+                onClick={() => setSelected(null)}
+              >
+                Buka lembar Risk Assessment <ArrowUpRight size={16} />
+              </Link>
+            )}
+          </>
         )}
       </Drawer>
       <ConfirmDialog

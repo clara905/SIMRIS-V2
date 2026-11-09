@@ -17,7 +17,7 @@ class KatalogRequest extends ApiRequest
     public function rules(): array
     {
         if ($this->isMethod('GET')) {
-            return ['page' => ['sometimes', 'integer', 'min:1'], 'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'], 'sort' => ['sometimes', 'string'], 'filter' => ['sometimes', 'array']];
+            return ['page' => ['sometimes', 'integer', 'min:1'], 'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'], 'sort' => ['sometimes', 'string'], 'filter' => ['sometimes', 'array'], 'q' => ['sometimes', 'string', 'max:255']];
         }
         if ($this->isMethod('DELETE')) {
             return [];

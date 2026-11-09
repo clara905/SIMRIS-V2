@@ -16,7 +16,7 @@ class PenilaianRisiko extends Model
 
     protected $table = 'PENILAIAN_RISIKO';
 
-    protected $fillable = ['risiko_id', 'matriks_id', 'dinilai_oleh', 'tahap', 'alasan_kemungkinan', 'alasan_dampak', 'kesimpulan', 'dinilai_pada'];
+    protected $fillable = ['risiko_id', 'matriks_id', 'dinilai_oleh', 'tahap', 'alasan_kemungkinan', 'alasan_dampak', 'kesimpulan', 'dinilai_pada', 'alasan_perubahan_level'];
 
     protected function casts(): array
     {

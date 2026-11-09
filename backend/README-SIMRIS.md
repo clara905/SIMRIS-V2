@@ -1,6 +1,6 @@
 # Backend SIMRIS - Tahap 1-12
 
-API Laravel untuk autentikasi SPA, scope unit, administrasi, metode risiko, katalog/aset, dokumen, asesmen dan residual, SOP/SOA, monitoring, audit, serta kerangka JSON Lampiran 14. Skema mengikuti ../docs/erd-v3.mmd dan perubahan brief yang disetujui. Frontend belum diintegrasikan dalam pekerjaan backend ini.
+API Laravel untuk autentikasi SPA, scope unit, administrasi, metode risiko, katalog/aset, dokumen, asesmen dan residual, SOP/SOA, monitoring, audit, serta kerangka JSON Lampiran 14. Skema mengikuti ../docs/erd-v3.mmd dan perubahan brief yang disetujui. Form asesmen Kasub terhubung ke endpoint asesmen; profil metode baru memakai kalkulasi server dan peta risiko baca-saja.
 
 API aset lokal belum tersedia; fixture sinkron 197 baris bersifat sintetis. Templat Lampiran 14 belum jadi, sehingga ekspor berkasnya belum dibuat.
 
@@ -39,6 +39,17 @@ ASET_UNIT_BAWAAN_KODE=SATKER-DEMO
 ```
 
 Isi password sendiri. `SIMRIS_DEMO_PASSWORD` hanya diperlukan jika `APP_ENV=local`. Tidak ada password bawaan. Semua akun yang dibuat seeder wajib mengganti password.
+
+### Login Firebase pada laptop baru
+
+Database baru hanya berisi skema dan data seeder; database ini tidak menyalin akun operasional dari `simrisoke`. Login SIMRIS juga memeriksa Firebase Authentication, bukan hanya password yang tersimpan di MySQL. Agar akun dapat login, email akun harus ada di tabel `USERS` database baru **dan** di Firebase Authentication pada project yang sama, dengan password yang benar serta email terverifikasi jika `SIMRIS_FIREBASE_WAJIB_EMAIL_TERVERIFIKASI=true`.
+
+1. Salin `frontend/.env.example` menjadi `frontend/.env`, lalu isi `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, dan `VITE_FIREBASE_APP_ID` dari konfigurasi Web App di Firebase Console.
+2. Isi `SIMRIS_FIREBASE_API_KEY` di `backend/.env` dengan Web API Key dari project Firebase yang sama. Aktifkan provider Email/Password di Firebase Authentication.
+3. Ganti contoh `SIMRIS_ADMIN_EMAIL=admin@example.test` dengan email nyata admin yang akan dipakai, dan pastikan akun email/password yang sama sudah dibuat serta diverifikasi di Firebase. Pada database baru, jalankan `php artisan migrate --seed` setelah nilai tersebut dikonfigurasi.
+4. Untuk login pengguna lain, buat/muat baris pengguna dan role yang sesuai pada database baru, lalu pastikan pengguna memiliki akun Firebase terverifikasi dengan email yang sama. Akun demo seeder memakai alamat `@example.test`, sehingga bukan akun email nyata untuk proses verifikasi.
+
+`SIMRIS_ADMIN_PASSWORD` saat seeding mengisi kredensial lokal baris admin, tetapi **tidak membuat akun Firebase**. Akun seeder tidak otomatis dapat login sebelum identitas Firebase yang cocok tersedia. Jangan membagikan file `.env`; bagikan nama variabel dan isi setiap laptop dengan konfigurasi Firebase yang disetujui. `VITE_RECAPTCHA_SITE_KEY` di frontend tidak dipakai: halaman login mengambil site key dari `/api/v1/config`; backend membutuhkan pasangan site key/secret reCAPTCHA yang terdaftar untuk alamat frontend yang dipakai.
 
 Setelah dependencies terpasang dan memastikan `DB_DATABASE` menunjuk database kosong yang benar:
 

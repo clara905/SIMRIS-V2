@@ -1,0 +1,126 @@
+.assessment-detail { display: grid; gap: 14px; padding-bottom: 14px; }
+.assessment-detail [hidden] { display: none !important; }
+.assessment-detail-hero { display: flex; justify-content: space-between; align-items: start; gap: 20px; }
+.assessment-detail-hero h1 { margin: 4px 0 6px; color: #202733; font-size: clamp(27px, 3vw, 34px); }
+.assessment-detail-hero p { margin: 0; color: #68717e; }
+.assessment-back { display: inline-flex; align-items: center; gap: 5px; margin-bottom: 12px; color: #9c1f31; font-size: 13px; font-weight: 600; text-decoration: none; }
+.assessment-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; padding: 18px 22px; }
+.assessment-summary span { color: #68717e; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+.assessment-summary p { margin: 6px 0 0; color: #303a49; white-space: pre-wrap; }
+.assessment-tabs { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; overflow-x: auto; }
+.assessment-tabs button { display: grid; gap: 4px; min-width: 120px; padding: 10px 12px; border: 1px solid #d5dce5; border-radius: 8px; color: #374151; background: #fff; text-align: left; cursor: pointer; }
+.assessment-tabs button[aria-selected="true"] { border-color: #9c1f31; color: #861b2a; background: #fff5f6; box-shadow: inset 0 0 0 1px #9c1f31; }
+.assessment-tabs button small { color: #68717e; font-size: 11px; }
+.assessment-info-panel { display: grid; gap: 12px; padding: 20px 22px; }
+.assessment-info-panel h2 { margin: 3px 0; color: #2b3442; font-size: 18px; }
+.assessment-info-panel > form { display: grid; gap: 12px; }
+.assessment-info-panel > form > label { display: grid; gap: 6px; color: #374151; font-size: 12px; font-weight: 600; }
+.assessment-info-panel > form > label input, .assessment-info-panel > form > label textarea { width: 100%; box-sizing: border-box; padding: 9px; border: 1px solid #ccd5df; border-radius: 7px; color: #202733; background: #fff; font: inherit; font-weight: 400; }
+.assessment-info-panel > form > label textarea { min-height: 80px; resize: vertical; }
+.assessment-info-panel > form > button { justify-self: end; padding: 9px 13px; }
+.assessment-rtp-panel { display: grid; gap: 12px; }
+.assessment-plan-form, .assessment-progress-form { display: grid; gap: 11px; padding: 14px; border: 1px solid #e1e6ec; border-radius: 8px; }
+.assessment-plan-form > label, .assessment-progress-form > label, .assessment-evidence > label { display: grid; gap: 6px; color: #374151; font-size: 12px; font-weight: 600; }
+.assessment-plan-form input, .assessment-plan-form select, .assessment-progress-form select, .assessment-progress-form textarea, .assessment-evidence input, .assessment-evidence select { width: 100%; box-sizing: border-box; padding: 9px; border: 1px solid #ccd5df; border-radius: 7px; color: #202733; background: #fff; font: inherit; font-weight: 400; }
+.assessment-progress-form textarea { min-height: 65px; resize: vertical; }
+.assessment-plan-form button, .assessment-progress-form button { justify-self: end; padding: 9px 13px; }
+.assessment-plan-list { display: grid; gap: 10px; }
+.assessment-plan-card { display: grid; gap: 8px; padding: 14px; border: 1px solid #e1e6ec; border-radius: 8px; background: #fff; }
+.assessment-plan-card header { display: flex; justify-content: space-between; gap: 8px; }
+.assessment-plan-card header div { display: flex; justify-content: space-between; gap: 10px; width: 100%; color: #303a49; font-size: 13px; }
+.assessment-plan-card header span, .assessment-plan-card > span { color: #68717e; font-size: 12px; }
+.assessment-plan-card > p, .assessment-progress p { margin: 0; color: #596575; font-size: 13px; white-space: pre-wrap; }
+.assessment-progress { display: grid; gap: 7px; padding: 10px 0; border-top: 1px solid #e8edf2; }
+.assessment-progress > strong { color: #303a49; font-size: 12px; }
+.assessment-evidence { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; gap: 8px; margin-top: 8px; padding: 10px; border-radius: 7px; background: #f7f8fa; }
+.assessment-evidence button { min-height: 36px; }
+.assessment-evidence small { grid-column: 1 / -1; color: #68717e; }
+.assessment-map { display: grid; gap: 16px; padding: 20px 22px; }
+.assessment-map > header { display: flex; justify-content: space-between; align-items: start; gap: 14px; }
+.assessment-map > header h2, .assessment-map-comparison h3 { margin: 4px 0 0; color: #2b3442; font-size: 18px; }
+.assessment-map > header p { margin: 0; color: #68717e; font-size: 12px; }
+.assessment-map-stages { display: flex; flex-wrap: wrap; gap: 8px; }
+.assessment-map-stages button { padding: 8px 11px; border: 1px solid #ccd5df; border-radius: 7px; color: #374151; background: #fff; cursor: pointer; }
+.assessment-map-stages button[aria-pressed="true"] { border-color: #9c1f31; color: #9c1f31; background: #fff5f6; font-weight: 700; }
+.assessment-map-table-wrap { overflow-x: auto; }
+.assessment-map-table { width: 100%; border-collapse: collapse; text-align: left; }
+.assessment-map-table caption { padding: 0 0 8px; color: #68717e; font-size: 12px; text-align: left; }
+.assessment-map-table th, .assessment-map-table td { min-width: 140px; padding: 10px; border-bottom: 1px solid #e8edf2; color: #374151; font-size: 12px; vertical-align: top; }
+.assessment-map-table tbody th { min-width: 180px; }
+.assessment-map-table tbody th span, .assessment-map-table td > span { display: block; margin-top: 4px; color: #68717e; font-weight: 400; white-space: pre-wrap; }
+.assessment-map-flag { width: fit-content; padding: 3px 6px; border-radius: 4px; color: #80350c !important; background: #fff2d6; font-weight: 700 !important; }
+.assessment-map-comparison { display: grid; gap: 8px; }
+.assessment-map-comparison article { display: grid; grid-template-columns: minmax(140px, 1fr) repeat(3, minmax(130px, 1fr)); gap: 8px; padding: 10px 0; border-top: 1px solid #e8edf2; color: #596575; font-size: 12px; }
+.assessment-map-comparison article strong { color: #303a49; }
+.assessment-map-comparison article p { grid-column: 1 / -1; margin: 0; white-space: pre-wrap; }
+.assessment-risk, .assessment-risk-form { padding: 20px 22px; }
+.assessment-risk-heading, .assessment-risk-form > header { display: flex; justify-content: space-between; align-items: start; gap: 14px; }
+.assessment-risk-heading h2, .assessment-risk-form h2 { margin: 4px 0 0; color: #2b3442; font-size: 18px; }
+.assessment-risk-heading button, .assessment-risk-form footer button { padding: 8px 11px; }
+.assessment-risk-meta { display: grid; gap: 5px; margin: 14px 0; padding: 12px; border-radius: 8px; background: #f7f8fa; }
+.assessment-risk-meta p { margin: 0; color: #596575; font-size: 13px; white-space: pre-wrap; }
+.assessment-rating-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.assessment-rating, .assessment-proposal { display: grid; align-content: start; gap: 10px; padding: 14px; border: 1px solid #e1e6ec; border-radius: 8px; }
+.assessment-rating h4, .assessment-proposal h4 { margin: 0; color: #303a49; font-size: 14px; }
+.assessment-rating label, .assessment-proposal-form label, .assessment-form-grid label { display: grid; gap: 6px; color: #374151; font-size: 12px; font-weight: 600; }
+.assessment-rating input, .assessment-rating select, .assessment-rating textarea, .assessment-proposal select, .assessment-proposal textarea, .assessment-form-grid input, .assessment-form-grid select, .assessment-form-grid textarea { width: 100%; box-sizing: border-box; padding: 9px; border: 1px solid #ccd5df; border-radius: 7px; color: #202733; background: #fff; font: inherit; font-weight: 400; }
+.assessment-rating textarea, .assessment-proposal textarea, .assessment-form-grid textarea { min-height: 65px; resize: vertical; }
+.assessment-rating-current, .assessment-proposal > p { margin: 0; color: #596575; font-size: 13px; white-space: pre-wrap; }
+.assessment-rating-preview { margin: 0; padding: 9px; border-left: 3px solid #a34a12; color: #71320d; background: #fff7ed; font-size: 12px; }
+.assessment-rating label small, .assessment-form-grid label small { color: #a51f30; font-size: 11px; }
+.assessment-rating label small:not([role="alert"]) { color: #68717e; }
+.assessment-map-filter { margin: 0; color: #596575; font-size: 12px; }
+.assessment-map-filter button { margin-left: 6px; border: 0; color: #9c1f31; background: transparent; text-decoration: underline; cursor: pointer; }
+.assessment-assets { display: grid; gap: 12px; padding: 18px 22px; }
+.assessment-assets > header h2 { margin: 4px 0 0; color: #2b3442; font-size: 17px; }
+.assessment-assets > ul { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.assessment-assets > ul li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid #e8edf2; color: #303a49; font-size: 12px; }
+.assessment-assets > ul li span { color: #68717e; }
+.assessment-snapshot-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 10px; }
+.assessment-snapshot-form label { display: grid; gap: 6px; color: #374151; font-size: 12px; font-weight: 600; }
+.assessment-snapshot-form input, .assessment-snapshot-form select { width: 100%; box-sizing: border-box; padding: 9px; border: 1px solid #ccd5df; border-radius: 7px; color: #202733; background: #fff; font: inherit; font-weight: 400; }
+.assessment-snapshot-form button { min-height: 36px; }
+.assessment-asset-links { display: flex; flex-wrap: wrap; gap: 10px 16px; padding: 10px; border: 1px solid #ccd5df; border-radius: 7px; }
+.assessment-asset-links legend { padding: 0 5px; color: #374151; font-size: 12px; font-weight: 600; }
+.assessment-form-grid .assessment-asset-links label { display: flex; align-items: center; gap: 6px; }
+.assessment-form-grid .assessment-asset-links input { width: auto; }
+.assessment-rating button, .assessment-proposal-form button { display: inline-flex; justify-content: center; align-items: center; gap: 6px; width: fit-content; padding: 8px 11px; }
+.assessment-proposal { margin-top: 14px; }
+.assessment-proposal-form { display: grid; gap: 10px; }
+.assessment-proposal-form button { justify-self: end; }
+.assessment-review-history { display: grid; gap: 10px; padding: 18px 22px; }
+.assessment-review-history h2 { margin: 0; color: #2b3442; font-size: 17px; }
+.assessment-review-history article { padding: 10px 0; border-top: 1px solid #e8edf2; }
+.assessment-review-history article > div { display: flex; justify-content: space-between; gap: 12px; color: #303a49; font-size: 13px; }
+.assessment-review-history article span, .assessment-review-history article p { color: #68717e; font-size: 12px; }
+.assessment-review-history article p { margin: 5px 0 0; white-space: pre-wrap; }
+.assessment-muted { color: #7a8491 !important; font-size: 13px; }
+.assessment-risk-form > header { padding-bottom: 14px; border-bottom: 1px solid #e8edf2; }
+.assessment-risk-form > header > svg { color: #bd2335; }
+.assessment-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; padding: 18px 0; }
+.assessment-form-grid .assessment-wide { grid-column: 1 / -1; }
+.assessment-risk-form footer { display: flex; justify-content: flex-end; gap: 8px; padding-top: 14px; border-top: 1px solid #e8edf2; }
+.assessment-risk-form footer button, .assessment-submit button { display: inline-flex; align-items: center; gap: 6px; }
+.assessment-submit { display: flex; justify-content: space-between; align-items: center; gap: 15px; padding: 14px 0 0; border-top: 1px solid #e1e6ec; color: #68717e; font-size: 12px; }
+.assessment-submit button { flex-shrink: 0; padding: 10px 13px; }
+.assessment-empty, .assessment-loading { padding: 20px; color: #68717e; }
+.assessment-error { display: grid; justify-items: start; gap: 8px; padding: 24px; }
+.assessment-error svg { color: #bd2335; }
+.assessment-error h1, .assessment-error p { margin: 0; }
+.assessment-error p { color: #68717e; }
+.assessment-error a { color: #9c1f31; }
+.assessment-alert { color: #a51f30; }
+.assessment-audit-hint { display: flex; align-items: center; gap: 7px; color: #68717e; font-size: 12px; }
+.assessment-audit-hint svg { flex: 0 0 auto; color: #196a42; }
+@media (max-width: 720px) {
+  .assessment-detail-hero { flex-direction: column; }
+  .assessment-summary, .assessment-rating-grid, .assessment-form-grid, .assessment-map-comparison article, .assessment-snapshot-form, .assessment-evidence { grid-template-columns: 1fr; }
+  .assessment-tabs { grid-template-columns: repeat(6, minmax(120px, 1fr)); }
+  .assessment-form-grid .assessment-wide { grid-column: auto; }
+  .assessment-submit { align-items: stretch; flex-direction: column; }
+  .assessment-submit button { justify-content: center; }
+  .assessment-risk, .assessment-risk-form { padding: 17px; }
+  .assessment-map { padding: 17px; }
+  .assessment-map > header { flex-direction: column; }
+  .assessment-assets > ul li { flex-direction: column; gap: 4px; }
+}

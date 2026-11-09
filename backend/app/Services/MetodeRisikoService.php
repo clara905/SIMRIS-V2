@@ -11,6 +11,7 @@ use App\Models\SkalaKemungkinan;
 use App\Models\TingkatRisiko;
 use App\Models\User;
 use App\Models\VersiMetodeRisiko;
+use App\Support\TextSearch;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -62,7 +63,11 @@ class MetodeRisikoService
                 throw new BusinessRuleException('matriks_beda_versi', 'Skala dan tingkat risiko harus berasal dari versi matriks yang sama.');
             }
         }
-        $cell->skor = $possibility->nilai * $impact->nilai;
+        $cell->skor = HitungRisiko::skor($possibility->nilai, $impact->nilai);
+        $version = VersiMetodeRisiko::findOrFail($cell->versi_metode_id);
+        if ($version->profil_penilaian && ($level->batas_min_skor === null || $level->batas_max_skor === null || $cell->skor < $level->batas_min_skor || $cell->skor > $level->batas_max_skor)) {
+            throw new BusinessRuleException('tingkat_tidak_sesuai_skor', 'Tingkat risiko harus sesuai dengan batas skor pada profil penilaian.');
+        }
     }
 
     public function listing(string $resource, array $input): mixed
@@ -77,6 +82,7 @@ class MetodeRisikoService
             }
             $query->where($field, $value);
         }
+        TextSearch::apply($query, $input['q'] ?? null, $allowed);
         $sort = $input['sort'] ?? 'id';
         if (! in_array(ltrim($sort, '-'), $allowed, true)) {
             throw ValidationException::withMessages(['sort' => ['Kolom urutan tidak diperbolehkan.']]);
@@ -158,7 +164,14 @@ class MetodeRisikoService
         foreach ($possibilities as $possibility) {
             foreach ($impacts as $impact) {
                 if (! MatriksRisiko::where('versi_metode_id', $version->id)->where('kemungkinan_id', $possibility->id)->where('dampak_id', $impact->id)->exists()) {
-                    MatriksRisiko::create(['versi_metode_id' => $version->id, 'kemungkinan_id' => $possibility->id, 'dampak_id' => $impact->id, 'tingkat_risiko_id' => $level->id, 'rekomendasi_keputusan' => $data['rekomendasi_keputusan']]);
+                    $score = HitungRisiko::skor($possibility->nilai, $impact->nilai);
+                    $cellLevel = $version->profil_penilaian
+                        ? TingkatRisiko::where('versi_metode_id', $version->id)->where('batas_min_skor', '<=', $score)->where('batas_max_skor', '>=', $score)->first()
+                        : $level;
+                    if (! $cellLevel) {
+                        throw new BusinessRuleException('tingkat_belum_ditetapkan', 'Batas tingkat risiko profil penilaian belum mencakup skor matriks.');
+                    }
+                    MatriksRisiko::create(['versi_metode_id' => $version->id, 'kemungkinan_id' => $possibility->id, 'dampak_id' => $impact->id, 'tingkat_risiko_id' => $cellLevel->id, 'rekomendasi_keputusan' => $data['rekomendasi_keputusan']]);
                 }
             }
         }
@@ -168,7 +181,7 @@ class MetodeRisikoService
 
     private function duplicate(VersiMetodeRisiko $source, array $data): VersiMetodeRisiko
     {
-        $target = VersiMetodeRisiko::create(['nama' => $data['nama'] ?? $source->nama, 'versi' => $data['versi'], 'referensi' => $data['referensi'] ?? $source->referensi, 'dibekukan' => false]);
+        $target = VersiMetodeRisiko::create(['nama' => $data['nama'] ?? $source->nama, 'versi' => $data['versi'], 'referensi' => $data['referensi'] ?? $source->referensi, 'dibekukan' => false, 'profil_penilaian' => $data['profil_penilaian'] ?? $source->profil_penilaian]);
         $maps = [];
         foreach ([SkalaKemungkinan::class, SkalaDampak::class, TingkatRisiko::class] as $class) {
             foreach ($class::where('versi_metode_id', $source->id)->orderBy($class === TingkatRisiko::class ? 'id' : 'nilai')->get() as $child) {
@@ -206,7 +219,7 @@ class MetodeRisikoService
                 $problems[] = 'Skala '.$name.' harus terisi dan berurutan mulai dari 1.';
             }
         }
-        $levels = TingkatRisiko::where('versi_metode_id', $version->id)->pluck('id');
+        $levels = TingkatRisiko::where('versi_metode_id', $version->id)->get()->keyBy('id');
         if ($levels->isEmpty()) {
             $problems[] = 'Minimal satu tingkat risiko diperlukan.';
         }
@@ -214,8 +227,11 @@ class MetodeRisikoService
         foreach ($cells as $cell) {
             $possibility = $possibilities->firstWhere('id', $cell->kemungkinan_id);
             $impact = $impacts->firstWhere('id', $cell->dampak_id);
-            if (! $possibility || ! $impact || ! $levels->contains($cell->tingkat_risiko_id) || $cell->skor !== $possibility->nilai * $impact->nilai) {
+            $level = $levels->get($cell->tingkat_risiko_id);
+            if (! $possibility || ! $impact || ! $level || $cell->skor !== HitungRisiko::skor($possibility->nilai, $impact->nilai)) {
                 $problems[] = 'Sel matriks '.$cell->id.' memiliki versi, tingkat, atau skor tidak valid.';
+            } elseif ($version->profil_penilaian && ($level->batas_min_skor === null || $level->batas_max_skor === null || $cell->skor < $level->batas_min_skor || $cell->skor > $level->batas_max_skor)) {
+                $problems[] = 'Sel matriks '.$cell->id.' tidak sesuai dengan batas tingkat risiko profil penilaian.';
             }
         }
         $pairs = $cells->groupBy(fn (MatriksRisiko $cell): string => $cell->kemungkinan_id.':'.$cell->dampak_id);
@@ -234,6 +250,39 @@ class MetodeRisikoService
                 if (! $criteria->contains(fn (KriteriaDampak $criterion): bool => $criterion->skala_dampak_id === $impact->id && $criterion->area_dampak_id === $area->id && in_array($criterion->arah_dampak, ['P', 'N'], true) && trim($criterion->deskripsi) !== '')) {
                     $problems[] = 'Kriteria dampak '.$impact->nilai.' untuk area '.$area->kode.' belum terisi.';
                 }
+            }
+        }
+        if ($version->profil_penilaian) {
+            if ($possibilities->count() !== 5 || $impacts->count() !== 5) {
+                $problems[] = 'Profil penilaian memerlukan lima tingkat kemungkinan dan lima tingkat dampak.';
+            }
+            $likelihoodLabels = [1 => 'Sangat jarang', 2 => 'Jarang', 3 => 'Mungkin', 4 => 'Sering', 5 => 'Hampir pasti'];
+            foreach ($likelihoodLabels as $value => $label) {
+                if (trim((string) $possibilities->firstWhere('nilai', $value)?->label) !== $label) {
+                    $problems[] = 'Label kemungkinan '.$value.' harus '.$label.'.';
+                }
+            }
+            $impactLabels = [1 => 'Tidak signifikan', 2 => 'Minor', 3 => 'Moderat', 4 => 'Mayor', 5 => 'Katastropik'];
+            foreach ($impactLabels as $value => $label) {
+                if (trim((string) $impacts->firstWhere('nilai', $value)?->label) !== $label) {
+                    $problems[] = 'Label dampak '.$value.' harus '.$label.'.';
+                }
+            }
+            $expected = [
+                'RENDAH' => ['Rendah', 1, 4, false, false],
+                'SEDANG' => ['Sedang', 5, 9, false, true],
+                'TINGGI' => ['Tinggi', 10, 16, true, false],
+                'SANGAT_TINGGI' => ['Sangat Tinggi', 17, 25, true, false],
+            ];
+            $configured = $levels->keyBy('kode');
+            foreach ($expected as $code => [$name, $min, $max, $rtp, $approval]) {
+                $level = $configured->get($code);
+                if (! $level || $level->nama !== $name || $level->batas_min_skor !== $min || $level->batas_max_skor !== $max || $level->perlu_rtp !== $rtp || $level->perlu_persetujuan_pemilik !== $approval || trim((string) $level->kriteria_penerimaan) === '') {
+                    $problems[] = 'Profil penilaian memerlukan tingkat '.$code.' dengan batas dan kriteria penerimaan yang disetujui.';
+                }
+            }
+            if ($configured->count() !== count($expected)) {
+                $problems[] = 'Profil penilaian harus memiliki tepat empat tingkat risiko yang disetujui.';
             }
         }
 

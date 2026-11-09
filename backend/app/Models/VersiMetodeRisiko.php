@@ -16,10 +16,10 @@ class VersiMetodeRisiko extends Model
 
     protected $table = 'VERSI_METODE_RISIKO';
 
-    protected $fillable = ['nama', 'versi', 'referensi', 'dibekukan'];
+    protected $fillable = ['nama', 'versi', 'referensi', 'dibekukan', 'profil_penilaian'];
 
     protected function casts(): array
     {
-        return ['dibekukan' => 'boolean'];
+        return ['dibekukan' => 'boolean', 'profil_penilaian' => 'boolean'];
     }
 }

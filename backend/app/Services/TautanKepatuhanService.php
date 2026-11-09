@@ -37,8 +37,10 @@ class TautanKepatuhanService
             if ($write) {
                 $assessment = app(AsesmenService::class)->assessments($actor)->whereKey($model->asesmen_id)->lockForUpdate()->firstOrFail();
                 Gate::forUser($actor)->authorize('asesmen.write', [$assessment]);
-                if ($assessment->status !== 'PENANGANAN' || $assessment->dibekukan_pada) {
-                    throw new BusinessRuleException('bukan_tahap_penanganan', 'Tautan penanganan hanya dapat diubah pada tahap PENANGANAN.');
+                if ($assessment->status === 'DRAFT' && ! $assessment->dibekukan_awal_pada && ! $assessment->dibekukan_pada) {
+                    app(AsesmenService::class)->assertDraftPeriodOpen($assessment);
+                } elseif (! in_array($assessment->status, ['DIREVIU', 'PENANGANAN'], true) || $assessment->dibekukan_pada) {
+                    throw new BusinessRuleException('bukan_tahap_penanganan', 'Tautan penanganan hanya dapat diubah pada tahap DIREVIU.');
                 }
             }
 

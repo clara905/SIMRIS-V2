@@ -62,6 +62,47 @@ function penangananReady(array $f): array
 
     return [$plan, $version];
 }
+
+test('staff can prepare an automatically numbered treatment plan in draft only', function (): void {
+    $f = penangananFixture();
+    $employee = Pegawai::factory()->create();
+    $f['actors']['STAFF']->update(['pegawai_id' => $employee->id]);
+    PenempatanPegawai::factory()->create(['pegawai_id' => $employee->id, 'unit_id' => $f['unit']->id]);
+
+    $plan = app(PenangananService::class)->plan($f['assessment']->id, null, [
+        'pic_id' => $employee->id,
+        'uraian' => 'Pemulihan layanan',
+        'target_selesai' => today()->addWeek()->toDateString(),
+        'risiko_ids' => [$f['risk']->id],
+    ], $f['actors']['STAFF']);
+
+    expect($plan->kode)->toBe('RP-0001')
+        ->and($f['assessment']->fresh()->status)->toBe('DRAFT');
+
+    DB::table('PERIODE_PENILAIAN')->where('id', $f['assessment']->periode_id)->update(['tanggal_selesai' => today()->subDay()]);
+    expect(fn () => app(PenangananService::class)->plan($f['assessment']->id, $plan->id, [
+        'uraian' => 'Perubahan setelah periode ditutup',
+    ], $f['actors']['STAFF']))->toThrow(BusinessRuleException::class);
+
+    DB::table('ASESMEN_RISIKO')->where('id', $f['assessment']->id)->update(['status' => 'DIAJUKAN']);
+    expect(fn () => app(PenangananService::class)->plan($f['assessment']->id, $plan->id, [
+        'uraian' => 'Perubahan setelah diajukan',
+    ], $f['actors']['STAFF']))->toThrow(BusinessRuleException::class);
+});
+
+test('progress remains writable after the assessment period closes', function (): void {
+    $f = penangananFixture();
+    [$plan] = penangananReady($f);
+    DB::table('PERIODE_PENILAIAN')->where('id', $f['assessment']->periode_id)->update(['tanggal_selesai' => today()->subDay()]);
+
+    $progress = app(PenangananService::class)->report($plan->id, [
+        'uraian' => 'Progres setelah periode ditutup',
+        'status' => 'BERJALAN',
+    ], $f['actors']['STAFF']);
+
+    expect($progress->uraian)->toBe('Progres setelah periode ditutup');
+});
+
 test('mitigation journey records evidence residual approvals and final decision then freezes every write', function (): void {
     $f = penangananFixture();
     [$plan,$version] = penangananReady($f);

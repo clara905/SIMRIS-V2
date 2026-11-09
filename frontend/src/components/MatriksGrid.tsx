@@ -8,7 +8,9 @@ export function MatriksGrid({
   tingkat,
   cells,
   selected = [],
+  counts = {},
   onSelect,
+  onCellSelect,
   readOnly = false,
 }: {
   kemungkinan: Skala[]
@@ -16,7 +18,9 @@ export function MatriksGrid({
   tingkat: TingkatRisiko[]
   cells: SelMatriks[]
   selected?: string[]
+  counts?: Record<string, number>
   onSelect?: (key: string) => void
+  onCellSelect?: (key: string) => void
   readOnly?: boolean
 }) {
   return (
@@ -25,7 +29,9 @@ export function MatriksGrid({
         <table className={s.table}>
           <caption>
             Kemungkinan × dampak ·{' '}
-            {readOnly
+            {onCellSelect
+              ? 'Klik sel untuk memfilter risiko pada tahap yang dipilih'
+              : readOnly
               ? 'Versi hanya-lihat'
               : 'Pilih satu atau beberapa sel untuk menetapkan tingkat risiko'}
           </caption>
@@ -51,17 +57,19 @@ export function MatriksGrid({
                   const key = `${k.nilai}-${d.nilai}`
                   const cell = cells.find((c) => c.kemungkinan === k.nilai && c.dampak === d.nilai)
                   const level = tingkat.find((l) => l.id === cell?.tingkat_id)
+                  const count = counts[key] ?? 0
                   const content = (
                     <>
                       <strong>{cell?.skor ?? k.nilai * d.nilai}</strong>
                       <span>{level?.nama || 'Belum ditetapkan'}</span>
+                      {onCellSelect && <span>{count} risiko</span>}
                     </>
                   )
                   return (
                     <td key={key}>
                       <Tooltip.Root>
                         <Tooltip.Trigger asChild>
-                          {readOnly ? (
+                          {readOnly && !onCellSelect ? (
                             <div
                               tabIndex={0}
                               className={`${s.cell} ${!level ? s.empty : ''}`}
@@ -78,15 +86,15 @@ export function MatriksGrid({
                             <button
                               id={`sel-${key}`}
                               type="button"
-                              aria-pressed={selected.includes(key)}
-                              aria-label={`Kemungkinan ${k.nilai}, dampak ${d.nilai}: ${level?.nama || 'Belum ditetapkan'}`}
+                              aria-pressed={readOnly ? undefined : selected.includes(key)}
+                              aria-label={`Kemungkinan ${k.nilai}, dampak ${d.nilai}: ${level?.nama || 'Belum ditetapkan'}${onCellSelect ? `, ${count} risiko` : ''}`}
                               className={`${s.cell} ${!level ? s.empty : ''}`}
                               style={
                                 level
                                   ? { background: level.warna, color: contrastText(level.warna) }
                                   : undefined
                               }
-                              onClick={() => onSelect?.(key)}
+                              onClick={() => readOnly ? onCellSelect?.(key) : onSelect?.(key)}
                             >
                               {content}
                             </button>

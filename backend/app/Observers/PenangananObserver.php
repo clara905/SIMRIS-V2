@@ -35,14 +35,17 @@ class PenangananObserver
             throw new BusinessRuleException('asesmen_dibekukan', 'Asesmen sudah dibekukan.');
         }
         if ($model instanceof KeputusanRisiko) {
-            if ($model->exists || $delete || $assessment->status !== 'MENUNGGU_KASATKER') {
-                throw new BusinessRuleException('keputusan_tetap', 'Keputusan hanya dibuat saat pengesahan akhir dan tidak dapat diubah.');
+            if ($model->exists || $delete || ! in_array($assessment->status, ['DIAJUKAN', 'MENUNGGU_KASATKER'], true)) {
+                throw new BusinessRuleException('keputusan_tetap', 'Keputusan hanya dapat dibuat pada persetujuan awal Kasatker dan tidak dapat diubah.');
             }
 
 return;
         }
-        if ($assessment->status !== 'PENANGANAN') {
-            throw new BusinessRuleException('bukan_tahap_penanganan', 'Penanganan hanya dapat diubah saat status PENANGANAN.');
+        if ($model instanceof RencanaPenanganan && $assessment->status === 'DRAFT') {
+            return;
+        }
+        if (! in_array($assessment->status, ['DIREVIU', 'PENANGANAN'], true)) {
+            throw new BusinessRuleException('bukan_tahap_penanganan', 'Penanganan hanya dapat diubah saat asesmen DIREVIU.');
         }
         if ($model->exists) {
             $stored = $model->newQuery()->whereKey($model->id)->lockForUpdate()->firstOrFail();

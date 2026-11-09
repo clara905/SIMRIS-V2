@@ -31,7 +31,7 @@ class PenangananService
 
     public function mitigationIds(AsesmenRisiko $assessment): array
     {
-        return PenilaianRisiko::whereIn('risiko_id', Risiko::where('asesmen_id', $assessment->id)->select('id'))->where('tahap', 'SAAT_INI')->whereIn('id', UsulanKeputusan::where('keputusan', 'MITIGASI')->select('penilaian_id'))->pluck('risiko_id')->map(fn ($id): int => (int) $id)->all();
+        return PenilaianRisiko::whereIn('risiko_id', Risiko::where('asesmen_id', $assessment->id)->select('id'))->where('tahap', 'SAAT_INI')->whereIn('id', UsulanKeputusan::whereIn('keputusan', ['MODIFIKASI', 'MITIGASI'])->select('penilaian_id'))->pluck('risiko_id')->map(fn ($id): int => (int) $id)->all();
     }
 
     public function authorizeProgress(User $actor, RencanaPenanganan $plan): void
@@ -44,8 +44,8 @@ class PenangananService
     private function active(int $id, User $actor): AsesmenRisiko
     {
         $assessment = $this->assessments->assessments($actor)->whereKey($id)->lockForUpdate()->firstOrFail();
-        if ($assessment->status !== 'PENANGANAN' || $assessment->dibekukan_pada) {
-            throw new BusinessRuleException('bukan_tahap_penanganan', 'Asesmen bukan dalam tahap PENANGANAN.');
+        if (! in_array($assessment->status, ['DIREVIU', 'PENANGANAN'], true) || $assessment->dibekukan_pada) {
+            throw new BusinessRuleException('bukan_tahap_penanganan', 'Asesmen bukan dalam tahap DIREVIU.');
         }
 
 return $assessment;
@@ -54,11 +54,23 @@ return $assessment;
     public function plan(int $assessmentId, ?int $id, array $data, User $actor): RencanaPenanganan
     {
         return DB::transaction(function () use ($assessmentId, $id, $data, $actor): RencanaPenanganan {
-            $assessment = $this->active($assessmentId, $actor);
+            $assessment = $this->assessments->assessments($actor)->whereKey($assessmentId)->lockForUpdate()->firstOrFail();
+            if (! in_array($assessment->status, ['DRAFT', 'DIREVIU', 'PENANGANAN'], true)
+                || $assessment->dibekukan_pada
+                || ($assessment->status === 'DRAFT' && $assessment->dibekukan_awal_pada)) {
+                throw new BusinessRuleException('rencana_bukan_draft', 'Rencana penanganan hanya dapat disusun saat DRAFT atau tahap penanganan.');
+            }
+            if ($assessment->status === 'DRAFT') {
+                $this->assessments->assertDraftPeriodOpen($assessment);
+            }
             Gate::forUser($actor)->authorize('asesmen.write', [$assessment]);
             $plan = $id ? $this->plans($actor)->where('asesmen_id', $assessmentId)->findOrFail($id) : new RencanaPenanganan(['asesmen_id' => $assessmentId, 'status' => 'DIRENCANAKAN']);
             $risks = $data['risiko_ids'] ?? null;
             unset($data['risiko_ids']);
+            unset($data['kode']);
+            if (! $id) {
+                $data['kode'] = $this->nextPlanCode($assessmentId);
+            }
             if (isset($data['pic_id'])) {
                 Pegawai::where('aktif', true)->whereIn('id', DB::table('PENEMPATAN_PEGAWAI')->select('pegawai_id')->whereIn('unit_id', $this->scope->ids($actor))->where('mulai', '<=', today())->where(fn ($q) => $q->whereNull('selesai')->orWhere('selesai', '>=', today())))->findOrFail($data['pic_id']);
             }
@@ -106,9 +118,12 @@ return $assessment;
                 $assessment = $this->assessments->assessmentFor('penilaian', $id, $actor);
                 Gate::forUser($actor)->authorize('asesmen.write', [$assessment]);
                 $assessment = AsesmenRisiko::whereKey($assessment->id)->lockForUpdate()->firstOrFail();
-                $expected = $rating->tahap === 'AKTUAL_SETELAH' ? 'RESIDUAL_DRAFT' : 'DRAFT';
+                $expected = $rating->tahap === 'AKTUAL_SETELAH' ? 'DIREVIU' : 'DRAFT';
                 if ($assessment->status !== $expected || $assessment->dibekukan_pada || ($expected === 'DRAFT' && $assessment->dibekukan_awal_pada)) {
                     throw new BusinessRuleException('bukti_dibekukan', 'Bukti tidak dapat diubah pada tahap ini.');
+                }
+                if ($expected === 'DRAFT') {
+                    $this->assessments->assertDraftPeriodOpen($assessment);
                 }
                 if ($rating->tahap === 'AKTUAL_SETELAH' && (int) PenilaianRisiko::where('risiko_id', $rating->risiko_id)->where('tahap', 'AKTUAL_SETELAH')->max('id') !== $rating->id) {
                     throw new BusinessRuleException('penilaian_bukan_terbaru', 'Bukti hanya ditambahkan ke penilaian aktual terbaru.');
@@ -167,5 +182,16 @@ return $assessment;
         }
         $pic = $actor->pegawai_id && in_array($assessment->unit_id,$this->scope->idsForRoles($actor,['STAFF']),true) && RencanaPenanganan::where('asesmen_id',$assessment->id)->where('pic_id',$actor->pegawai_id)->exists();
         abort_unless($pic,403,'Hanya PIC atau penyusun dalam scope dapat menyelesaikan penanganan.');
+    }
+
+    private function nextPlanCode(int $assessmentId): string
+    {
+        $number = 1;
+        do {
+            $code = 'RP-'.str_pad((string) $number, 4, '0', STR_PAD_LEFT);
+            $number++;
+        } while (RencanaPenanganan::where('asesmen_id', $assessmentId)->where('kode', $code)->exists());
+
+        return $code;
     }
 }

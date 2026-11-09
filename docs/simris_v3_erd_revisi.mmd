@@ -140,6 +140,7 @@ erDiagram
         varchar versi
         text referensi
         boolean dibekukan
+        boolean profil_penilaian "Default false; hanya profil baru"
         datetime dibekukan_pada "Nullable sebelum dibekukan"
     }
 
@@ -159,6 +160,11 @@ erDiagram
         int nilai "UK gabungan dengan versi_metode_id"
         varchar label
         text kriteria
+        text kriteria_kerahasiaan "Nullable"
+        text kriteria_integritas "Nullable"
+        text kriteria_ketersediaan "Nullable"
+        text kriteria_kepatuhan "Nullable"
+        text kriteria_operasional "Nullable"
     }
 
     %% [REVISI] Tambah aktif: master yang sudah dipakai hanya boleh dinonaktifkan, tidak diubah isinya
@@ -184,6 +190,11 @@ erDiagram
         varchar kode
         varchar nama
         varchar warna
+        smallint batas_min_skor "Nullable; profil baru"
+        smallint batas_max_skor "Nullable; profil baru"
+        boolean perlu_rtp "Nullable; profil baru"
+        boolean perlu_persetujuan_pemilik "Nullable; profil baru"
+        text kriteria_penerimaan "Nullable; profil baru"
     }
 
     %% [REVISI] UNIQUE (versi_metode_id, kemungkinan_id, dampak_id)
@@ -199,6 +210,10 @@ erDiagram
     }
 
     %% ---------- ASESMEN RISIKO ----------
+    %% [REVISI] Peta risiko adalah proyeksi baca dari PENILAIAN_RISIKO + MATRIKS_RISIKO
+    %%          per SAAT_INI/TARGET_SETELAH/AKTUAL_SETELAH; jumlah dan risiko_ids
+    %%          dihitung endpoint, tidak disimpan sebagai skor turunan yang dapat basi.
+    %%          Pada profil baru, input kemungkinan/dampak 1-5 dipetakan backend ke sel metode.
     %% [REVISI] UNIQUE (seri_asesmen_id, nomor_versi)
     %% [REVISI] versi_metode_id harus berstatus dibekukan
     ASESMEN_RISIKO {
@@ -277,6 +292,12 @@ erDiagram
         text uraian_kerentanan "Konteks spesifik"
         text uraian_dampak
         varchar arah_dampak "P atau N"
+        varchar konteks "Nullable"
+        text konsekuensi_kerahasiaan "Nullable"
+        text konsekuensi_integritas "Nullable"
+        text konsekuensi_ketersediaan "Nullable"
+        text konsekuensi_kepatuhan "Nullable"
+        text konsekuensi_operasional "Nullable"
         varchar kode_ancaman_snapshot
         varchar nama_ancaman_snapshot
         varchar kode_kerentanan_snapshot
@@ -327,6 +348,7 @@ erDiagram
         text alasan_kemungkinan
         text alasan_dampak
         text kesimpulan
+        text alasan_perubahan_level "Wajib jika target profil lebih tinggi"
         datetime dinilai_pada
     }
 

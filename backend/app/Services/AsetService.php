@@ -42,15 +42,6 @@ class AsetService
             unset($filters['perlu_ditinjau']);
             $input['filter'] = $filters;
         }
-        if (! $assignment && isset($input['q'])) {
-            $q = $input['q'];
-            $query->where(function (Builder $query) use ($q): void {
-                foreach (['nama', 'merk', 'nomor_seri', 'nomor_inventaris'] as $column) {
-                    $query->orWhere($column, 'like', '%'.$q.'%');
-                }
-            });
-        }
-
         return $this->catalog->filtered($query, $input, $allowed)->paginate((int) ($input['per_page'] ?? 20))->withQueryString();
     }
 

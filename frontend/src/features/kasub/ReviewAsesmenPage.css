@@ -8,6 +8,21 @@
 .kasub-review-workflow > svg { color: #bd2335; }.kasub-review-flow-step { display: flex; align-items: center; gap: 10px; }.kasub-review-flow-step > span { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 50%; color: #a51f30; background: #fff0f1; font-size: 10px; font-weight: 700; }.kasub-review-flow-step div { display: grid; gap: 1px; }.kasub-review-flow-step p { margin: 0; color: #68717e; font-size: 12px; }
 .kasub-review-queue { padding: 22px 24px 18px; }.kasub-review-queue > header { display: flex; justify-content: space-between; align-items: start; gap: 14px; }.kasub-review-queue h2 { margin: 4px 0 0; font-size: 18px; color: #2b3442; }.kasub-review-queue > header > svg { color: #bd2335; }
 .kasub-review-unavailable { display: grid; place-items: center; text-align: center; gap: 6px; padding: 26px 10px; color: #68717e; }.kasub-review-unavailable > svg { color: #bd2335; }.kasub-review-unavailable strong { color: #303a49; }.kasub-review-unavailable p { max-width: 390px; margin: 0; font-size: 13px; }.kasub-review-unavailable small { display: flex; align-items: center; gap: 5px; color: #8a6170; }.kasub-review-unavailable code { color: #8f2032; }
+.kasub-review-loading { padding: 22px 4px; color: #68717e; }
+.kasub-review-list { display: grid; gap: 12px; padding: 18px 0; }
+.kasub-review-item { display: grid; gap: 10px; padding: 16px; border: 1px solid #e1e6ec; border-radius: 9px; background: #fff; }
+.kasub-review-item-heading { display: flex; justify-content: space-between; align-items: start; gap: 14px; }
+.kasub-review-item-heading h3 { margin: 4px 0 0; color: #2b3442; font-size: 16px; }
+.kasub-review-item > p { margin: 0; color: #596575; }
+.kasub-review-reference-error { color: #a51f30 !important; font-size: 12px; }
+.kasub-review-item-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; color: #68717e; font-size: 12px; }
+.kasub-review-detail-link { display: inline-flex; align-items: center; gap: 5px; width: fit-content; color: #9c1f31; font-size: 13px; font-weight: 600; text-decoration: none; }
+.kasub-review-note { display: grid; gap: 6px; color: #374151; font-size: 13px; font-weight: 600; }
+.kasub-review-note textarea { min-height: 65px; padding: 9px; border: 1px solid #ccd5df; border-radius: 7px; color: #202733; font: inherit; font-weight: 400; resize: vertical; }
+.kasub-review-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.kasub-review-actions button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; }
+.kasub-review-actions button:not(.primary) { border: 1px solid #d6abb0; border-radius: 7px; color: #9c1f31; background: white; }
+.kasub-review-status { margin-top: 12px; }
 .kasub-review-status { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px; padding-top: 13px; border-top: 1px solid #edf0f3; color: #6d7785; font-size: 12px; }.kasub-review-status > span { white-space: nowrap; }.kasub-review-status > div { display: flex; flex-wrap: wrap; gap: 6px; }.kasub-review-status .ws-badge { padding: 5px 8px; font-size: 11px; }
 @media (max-width: 900px) { .kasub-review-hero { align-items: start; flex-direction: column; } }
-@media (max-width: 640px) { .kasub-review-workflow { grid-template-columns: 1fr; }.kasub-review-workflow > svg { transform: rotate(90deg); justify-self: center; }.kasub-review-queue { padding: 18px 16px 16px; }.kasub-review-status > header { display: grid; }.kasub-review-status > header p { text-align: left; }.kasub-review-scope { min-width: 0; box-sizing: border-box; width: 100%; } }
+@media (max-width: 640px) { .kasub-review-workflow { grid-template-columns: 1fr; }.kasub-review-workflow > svg { transform: rotate(90deg); justify-self: center; }.kasub-review-queue { padding: 18px 16px 16px; }.kasub-review-status > header { display: grid; }.kasub-review-status > header p { text-align: left; }.kasub-review-scope { min-width: 0; box-sizing: border-box; width: 100%; }.kasub-review-item-heading { flex-direction: column; }.kasub-review-actions { justify-content: stretch; }.kasub-review-actions button { flex: 1; justify-content: center; } }

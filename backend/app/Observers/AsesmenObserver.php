@@ -57,9 +57,9 @@ class AsesmenObserver
             throw new BusinessRuleException('asesmen_dibekukan', 'Asesmen sudah dibekukan.');
         }
         $residual = $model instanceof PenilaianRisiko && $model->tahap === 'AKTUAL_SETELAH';
-        if ($residual && (! $stored && ! $delete)) {
-            if ($assessment->status !== 'RESIDUAL_DRAFT') {
-                throw new BusinessRuleException('residual_bukan_draft', 'Penilaian aktual hanya dapat ditambahkan pada RESIDUAL_DRAFT.');
+        if ($residual) {
+            if (! in_array($assessment->status, ['DIREVIU', 'RESIDUAL_DRAFT'], true)) {
+                throw new BusinessRuleException('residual_bukan_draft', 'Penilaian aktual hanya dapat diubah pada asesmen DIREVIU.');
             }
         } elseif ($assessment->status !== 'DRAFT' || $assessment->dibekukan_awal_pada) {
             throw new BusinessRuleException('asesmen_bukan_draft', 'Bagian awal asesmen sudah tidak dapat diubah.');

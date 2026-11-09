@@ -23,6 +23,11 @@ class AsesmenController extends Controller
         return AsesmenResource::collection($this->service->listing($request->route('resource'), $request->user(), $request->validated(), $request->route('assessment') ? (int) $request->route('assessment') : null, $request->route('risk') ? (int) $request->route('risk') : null));
     }
 
+    public function riskMap(AsesmenRequest $request): JsonResponse
+    {
+        return response()->json(['data' => $this->service->riskMap((int) $request->route('assessment'), $request->user())]);
+    }
+
     #[Response(status: 401, description: 'Autentikasi diperlukan.', type: 'array{message: string}')]
     #[Response(status: 403, description: 'Hak akses tidak memenuhi syarat.', type: 'array{message: string, code?: string}')]
     #[Response(status: 404, description: 'Data tidak ada atau di luar scope.', type: 'array{message: string}')]

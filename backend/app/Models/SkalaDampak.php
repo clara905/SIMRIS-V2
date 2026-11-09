@@ -16,7 +16,7 @@ class SkalaDampak extends Model
 
     protected $table = 'SKALA_DAMPAK';
 
-    protected $fillable = ['versi_metode_id', 'nilai', 'label', 'kriteria'];
+    protected $fillable = ['versi_metode_id', 'nilai', 'label', 'kriteria', 'kriteria_kerahasiaan', 'kriteria_integritas', 'kriteria_ketersediaan', 'kriteria_kepatuhan', 'kriteria_operasional'];
 
     protected function casts(): array
     {

@@ -15,6 +15,7 @@ use App\Models\StandarKontrol;
 use App\Models\SumberAncaman;
 use App\Models\SumberAset;
 use App\Models\User;
+use App\Support\TextSearch;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
@@ -64,6 +65,7 @@ class KatalogService
                 throw ValidationException::withMessages(['filter' => ['Kolom atau nilai filter tidak diperbolehkan.']]);
             } $query->where($key, $value);
         }
+        TextSearch::apply($query, $input['q'] ?? null, $allowed);
         $sort = $input['sort'] ?? 'id';
         $column = ltrim($sort, '-');
         if (! in_array($column, [...$allowed, ...($timestamps ? ['created_at', 'updated_at'] : [])], true)) {

@@ -100,6 +100,30 @@ test('catalog list validates filter and sorting', function (): void {
     $this->getJson('/api/ancaman?filter[secret]=x')->assertUnprocessable();
     $this->getJson('/api/ancaman?per_page=101')->assertUnprocessable();
 });
+test('catalog list searches text across records without treating numeric text as an id', function (): void {
+    $user = katalogActor();
+    $type = JenisAncaman::factory()->create();
+    $matching = \App\Models\Ancaman::factory()->create([
+        'jenis_ancaman_id' => $type->id,
+        'kode' => 'ANC-A',
+        'nama' => 'Gangguan Infrastruktur',
+    ]);
+    \App\Models\Ancaman::factory()->create([
+        'jenis_ancaman_id' => $type->id,
+        'kode' => 'ANC-B',
+        'nama' => 'Kehilangan Perangkat',
+    ]);
+
+    $this->actingAs($user)
+        ->getJson('/api/ancaman?q=infra&per_page=1')
+        ->assertOk()
+        ->assertJsonPath('meta.total', 1)
+        ->assertJsonPath('data.0.id', $matching->id);
+
+    $this->getJson('/api/ancaman?q='.$matching->id)
+        ->assertOk()
+        ->assertJsonPath('meta.total', 0);
+});
 test('asset roles can read in scope but only admin satker can edit local fields', function (string $role): void {
     $unit = UnitOrganisasi::factory()->create();
     $user = katalogActor($role, $unit);

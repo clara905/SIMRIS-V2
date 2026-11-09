@@ -230,6 +230,7 @@ test('method list validates pagination filters and sorting', function (): void {
     VersiMetodeRisiko::factory()->create(['nama' => 'Dicari']);
     VersiMetodeRisiko::factory()->create(['nama' => 'Lain']);
     $this->actingAs($user)->getJson('/api/versi-metode-risiko?filter[nama]=Dicari&sort=-id&per_page=1')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('meta.total', 1);
+    $this->getJson('/api/versi-metode-risiko?q=cari')->assertOk()->assertJsonPath('meta.total', 1);
     foreach (['per_page=101', 'filter[unknown]=x', 'sort=id%20desc', 'filter[nama][]=x'] as $query) {
         $this->getJson('/api/versi-metode-risiko?'.$query)->assertUnprocessable();
     }
@@ -314,6 +315,67 @@ test('generate rejects empty scales and foreign levels before any cell is writte
     $this->postJson('/api/matriks-risiko/generate', ['versi_metode_id' => $version->id, 'tingkat_risiko_id' => $other->id, 'rekomendasi_keputusan' => 'TERIMA'])->assertConflict()->assertJsonPath('code', 'matriks_beda_versi');
     expect(MatriksRisiko::count())->toBe(0);
 });
+
+test('profile matrices assign the approved score bands server side and reject mismatched levels', function (): void {
+    $user = metodeActor();
+    $version = VersiMetodeRisiko::factory()->create(['profil_penilaian' => true]);
+    $levels = [];
+    foreach ([
+        ['RENDAH', 'Rendah', 1, 4, false, false],
+        ['SEDANG', 'Sedang', 5, 9, false, true],
+        ['TINGGI', 'Tinggi', 10, 16, true, false],
+        ['SANGAT_TINGGI', 'Sangat Tinggi', 17, 25, true, false],
+    ] as [$code, $name, $min, $max, $rtp, $approval]) {
+        $levels[$code] = TingkatRisiko::factory()->create([
+            'versi_metode_id' => $version->id,
+            'kode' => $code,
+            'nama' => $name,
+            'batas_min_skor' => $min,
+            'batas_max_skor' => $max,
+            'perlu_rtp' => $rtp,
+            'perlu_persetujuan_pemilik' => $approval,
+            'kriteria_penerimaan' => 'Kriteria '.$name,
+        ]);
+    }
+    foreach (range(1, 5) as $value) {
+        SkalaKemungkinan::factory()->create(['versi_metode_id' => $version->id, 'nilai' => $value]);
+        SkalaDampak::factory()->create(['versi_metode_id' => $version->id, 'nilai' => $value]);
+    }
+
+    $this->actingAs($user)->postJson('/api/matriks-risiko/generate', [
+        'versi_metode_id' => $version->id,
+        'tingkat_risiko_id' => $levels['RENDAH']->id,
+        'rekomendasi_keputusan' => 'MITIGASI',
+    ])->assertOk();
+
+    expect(MatriksRisiko::where('versi_metode_id', $version->id)->count())->toBe(25);
+    foreach (MatriksRisiko::where('versi_metode_id', $version->id)->get() as $cell) {
+        $level = TingkatRisiko::findOrFail($cell->tingkat_risiko_id);
+        expect($cell->skor)->toBeGreaterThanOrEqual($level->batas_min_skor)
+            ->and($cell->skor)->toBeLessThanOrEqual($level->batas_max_skor);
+    }
+
+    $lowCell = MatriksRisiko::where('versi_metode_id', $version->id)->where('skor', 4)->firstOrFail();
+    $this->patchJson('/api/matriks-risiko/'.$lowCell->id, ['tingkat_risiko_id' => $levels['SEDANG']->id])
+        ->assertConflict()
+        ->assertJsonPath('code', 'tingkat_tidak_sesuai_skor');
+});
+
+test('profile methods cannot validate or freeze before approved scales and thresholds are complete', function (): void {
+    $user = metodeActor();
+    $version = VersiMetodeRisiko::factory()->create(['profil_penilaian' => true]);
+    $this->actingAs($user)->withSession(['auth.password_confirmed_at' => now()->timestamp]);
+
+    $this->postJson('/api/versi-metode-risiko/'.$version->id.'/validasi')
+        ->assertOk()
+        ->assertJsonPath('data.valid', false)
+        ->assertJsonFragment(['Profil penilaian memerlukan lima tingkat kemungkinan dan lima tingkat dampak.']);
+    $this->postJson('/api/versi-metode-risiko/'.$version->id.'/bekukan')
+        ->assertConflict()
+        ->assertJsonPath('code', 'metode_belum_valid');
+    expect($version->fresh()->dibekukan)->toBeFalse();
+});
+
 test('method actions require authentication and active roles', function (): void {
     foreach (['/api/matriks-risiko/generate', '/api/versi-metode-risiko/1/bekukan', '/api/versi-metode-risiko/1/duplikasi', '/api/versi-metode-risiko/1/validasi'] as $url) {
         $this->postJson($url)->assertUnauthorized();

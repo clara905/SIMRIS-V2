@@ -155,6 +155,7 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function (): void {
     $controller = AsesmenController::class;
     Route::get('/asesmen', [$controller, 'index'])->defaults('resource', 'asesmen');
     Route::post('/asesmen', [$controller, 'store'])->defaults('resource', 'asesmen');
+    Route::get('/asesmen/{assessment}/peta-risiko', [$controller, 'riskMap'])->whereNumber('assessment');
     foreach (['asesmen', 'risiko', 'asesmen-aset', 'penilaian', 'usulan-keputusan'] as $resource) {
         Route::get('/'.$resource.'/{id}', [$controller, 'show'])->whereNumber('id')->defaults('resource', $resource);
     }

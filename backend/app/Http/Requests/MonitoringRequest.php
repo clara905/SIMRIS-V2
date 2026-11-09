@@ -21,6 +21,7 @@ class MonitoringRequest extends ApiRequest
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
             'sort' => ['sometimes', 'string'],
             'filter' => ['sometimes', 'array'],
+            'q' => ['sometimes', 'string', 'max:255'],
             ...($this->route('resource') === 'lampiran-14'
                 ? ['asesmen_id' => ['required', 'integer'], 'format' => ['prohibited']]
                 : []),

@@ -49,6 +49,6 @@ class PenangananRequest extends ApiRequest
         }
         $required = $this->isMethod('POST') ? 'required' : 'sometimes';
 
-        return ['rencana_kerja_id' => ['sometimes', 'nullable', 'integer', Rule::exists('RENCANA_KERJA', 'id')], 'pic_id' => [$required, 'integer'], 'kode' => [$required, 'string', 'max:255'], 'uraian' => [$required, 'string', 'max:10000'], 'target_selesai' => [$required, 'date_format:Y-m-d'], 'risiko_ids' => [$required, 'array', 'min:1', 'max:100'], 'risiko_ids.*' => ['integer', 'distinct'], 'status' => ['prohibited'], 'asesmen_id' => ['prohibited']];
+        return ['rencana_kerja_id' => ['sometimes', 'nullable', 'integer', Rule::exists('RENCANA_KERJA', 'id')], 'pic_id' => [$required, 'integer'], 'kode' => ['prohibited'], 'uraian' => [$required, 'string', 'max:10000'], 'target_selesai' => [$required, 'date_format:Y-m-d'], 'risiko_ids' => [$required, 'array', 'min:1', 'max:100'], 'risiko_ids.*' => ['integer', 'distinct'], 'status' => ['prohibited'], 'asesmen_id' => ['prohibited']];
     }
 }

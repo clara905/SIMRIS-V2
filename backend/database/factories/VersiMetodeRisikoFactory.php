@@ -32,6 +32,6 @@ class VersiMetodeRisikoFactory extends Factory
 
     public function definition(): array
     {
-        return ['nama' => fake()->words(3, true), 'versi' => fake()->unique()->numerify('versi-####'), 'referensi' => 'Pedoman penilaian risiko', 'dibekukan' => false];
+        return ['nama' => fake()->words(3, true), 'versi' => fake()->unique()->numerify('versi-####'), 'referensi' => 'Pedoman penilaian risiko', 'dibekukan' => false, 'profil_penilaian' => false];
     }
 }
