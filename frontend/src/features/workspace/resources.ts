@@ -178,8 +178,8 @@ export const modules = [
     label: 'Kelola aset & penugasan',
     group: 'Pengelolaan satker',
     icon: Boxes,
-    roles: ['ADMIN_SATKER'],
-    description: 'Ubah data lokal aset dan tetapkan penanggung jawab dalam unit Anda.',
+    roles: ['ADMIN_SATKER', 'KASUB'],
+    description: 'Kelola inventaris aset dalam lingkup unit Anda.',
     resources: [] as Resource[],
   },
   {
@@ -221,9 +221,17 @@ export const modules = [
     resources: [
       resource('ancaman', 'Ancaman', ['kode', 'nama', 'deskripsi']),
       resource('kerentanan', 'Kerentanan', ['kode', 'nama', 'deskripsi']),
-      resource('kategori-aset', 'Kategori aset', ['kode', 'nama']),
       resource('klasifikasi-informasi', 'Klasifikasi informasi', ['kode', 'nama']),
     ],
+  },
+  {
+    path: '/kategori-aset',
+    label: 'Kategori aset',
+    group: 'Referensi',
+    icon: Boxes,
+    roles: ['SUPER_ADMIN'],
+    description: 'Kelola kategori dan hierarki kategori inventaris aset.',
+    resources: [] as Resource[],
   },
   {
     path: '/standar',

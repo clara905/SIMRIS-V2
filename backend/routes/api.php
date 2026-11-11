@@ -125,11 +125,14 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function (): void {
     $controller = AsetController::class;
     Route::post('/aset/tetapkan', [$controller, 'assign'])->defaults('resource', 'aset')->defaults('action', 'tetapkan');
     Route::post('/aset-sinkron/jalankan', [$controller, 'sync'])->defaults('resource', 'aset-sinkron');
+    Route::get('/aset/pilihan', [$controller, 'options'])->defaults('resource', 'aset-pilihan');
     foreach (['aset', 'penugasan-aset', 'aset-sinkron'] as $resource) {
         Route::get('/'.$resource, [$controller, 'index'])->defaults('resource', $resource);
         Route::get('/'.$resource.'/{id}', [$controller, 'show'])->whereNumber('id')->defaults('resource', $resource);
     }
-    Route::patch('/aset/{id}', [$controller, 'update'])->whereNumber('id')->defaults('resource', 'aset');
+    Route::post('/aset', [$controller, 'store'])->defaults('resource', 'aset');
+    Route::match(['PUT', 'PATCH'], '/aset/{id}', [$controller, 'update'])->whereNumber('id')->defaults('resource', 'aset');
+    Route::delete('/aset/{id}', [$controller, 'destroy'])->whereNumber('id')->defaults('resource', 'aset');
     Route::post('/penugasan-aset', [$controller, 'store'])->defaults('resource', 'penugasan-aset');
     Route::match(['PUT', 'PATCH'], '/penugasan-aset/{id}', [$controller, 'update'])->whereNumber('id')->defaults('resource', 'penugasan-aset');
     Route::delete('/penugasan-aset/{id}', [$controller, 'destroy'])->whereNumber('id')->defaults('resource', 'penugasan-aset');

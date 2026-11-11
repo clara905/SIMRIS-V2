@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Edit3, Plus, RefreshCw, Search, Trash2 } from 'lucide-react'
+import { Edit3, Plus, RefreshCw, Search, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { api, errorMessage, fieldErrors } from '../../api/client'
@@ -15,6 +15,10 @@ import {
   type Row,
 } from './api'
 import { isAssetPendingAssessment } from '../aset/assessment'
+import { useSession } from '../../api/auth'
+import { KasubAsetCrud } from './KasubAsetCrud'
+import { Field, KondisiPill, Pager, Pill, Section, SelectBox, StatusPill } from './asetUi'
+import { namaSaja, text as str } from './asetUtils'
 
 type Lookups = {
   unit: Option[]
@@ -24,11 +28,11 @@ type Lookups = {
   sumber: Option[]
 }
 
-const str = (value: unknown) => (value == null ? '' : String(value))
 const labelOf = (options: Option[] | undefined, id: unknown) =>
   options?.find((o) => String(o.id) === str(id))?.label ?? (id == null || id === '' ? '-' : '#' + str(id))
 
 type BulkResult = { berhasil: number; gagal: number; masalah: Array<{ id: number; pesan: string }> }
+type AssessmentFilter = 'all' | 'pending' | 'assessed'
 
 function useLookups(): { data: Lookups; isPending: boolean } {
   const unit = useQuery({ queryKey: ['satker', 'opt', 'unit'], queryFn: ({ signal }) => getOptions('/api/unit-organisasi', byKodeNama, signal), staleTime: 300_000 })
@@ -49,10 +53,18 @@ function useLookups(): { data: Lookups; isPending: boolean } {
 }
 
 export function KelolaAset() {
+  const session = useSession()
+  const roleCodes = session.data?.roleCodes ?? []
+  const isKasubOnly = roleCodes.includes('KASUB') && !roleCodes.some((role) => ['ADMIN_SATKER', 'SUPER_ADMIN'].includes(role))
+
+  return isKasubOnly ? <KasubAsetCrud /> : <SatkerKelolaAset />
+}
+
+function SatkerKelolaAset() {
   const [page, setPage] = useState(1)
   const [draft, setDraft] = useState('')
   const [q, setQ] = useState('')
-  const [assessment, setAssessment] = useState<'all' | 'pending' | 'assessed'>('all')
+  const [assessment, setAssessment] = useState<AssessmentFilter>('all')
   const [selected, setSelected] = useState<Row | null>(null)
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [bulkUnit, setBulkUnit] = useState('')
@@ -94,6 +106,12 @@ export function KelolaAset() {
     }
     return checked ? [...new Set([...ids, id])] : ids.filter((value) => value !== id)
   })
+  const changeFilter = (value: AssessmentFilter) => {
+    setAssessment(value)
+    setSelectedIds([])
+    setPage(1)
+  }
+  const showCheckbox = assessment === 'pending'
 
   return (
     <>
@@ -104,10 +122,11 @@ export function KelolaAset() {
           <p>Ubah data lokal aset dan tetapkan penanggung jawab. Data sumber tidak dapat diubah.</p>
         </div>
       </div>
-      <section className="ws-panel">
-        <div className="ws-register-tools">
+
+      <section className="as-card">
+        <div className="as-toolbar">
           <form
-            className="ws-filter"
+            className="as-search"
             onSubmit={(e) => {
               e.preventDefault()
               setQ(draft.trim())
@@ -117,51 +136,29 @@ export function KelolaAset() {
             <Search size={17} />
             <input
               aria-label="Cari aset"
-              placeholder="Cari nama, merk, nomor seri, atau nomor inventaris..."
+              placeholder="Cari nama, merk, nomor seri, atau nomor inventaris…"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
             />
-            <button type="submit">Cari</button>
+            <button type="submit" className="as-btn">Cari</button>
           </form>
-          <button
-            type="button"
-            aria-pressed={assessment === 'pending'}
-            onClick={() => {
-              setAssessment((value) => value === 'pending' ? 'all' : 'pending')
-              setSelectedIds([])
-              setPage(1)
-            }}
-          >
-            Belum dinilai
-          </button>
-          <button
-            type="button"
-            aria-pressed={assessment === 'assessed'}
-            onClick={() => {
-              setAssessment((value) => value === 'assessed' ? 'all' : 'assessed')
-              setSelectedIds([])
-              setPage(1)
-            }}
-          >
-            Sudah dinilai
-          </button>
-          {(q || assessment !== 'all') && (
-            <button
-              type="button"
-              onClick={() => {
-                setDraft('')
-                setQ('')
-                setAssessment('all')
-                setSelectedIds([])
-                setPage(1)
-              }}
-            >
-              Reset filter
+
+          <div className="as-segment" role="group" aria-label="Filter status penilaian">
+            <button type="button" aria-pressed={assessment === 'all'} onClick={() => changeFilter('all')}>Semua</button>
+            <button type="button" aria-pressed={assessment === 'pending'} onClick={() => changeFilter('pending')}>Belum dinilai</button>
+            <button type="button" aria-pressed={assessment === 'assessed'} onClick={() => changeFilter('assessed')}>Sudah dinilai</button>
+          </div>
+
+          <span className="as-toolbar-spacer" />
+          {q && (
+            <button type="button" className="as-btn" onClick={() => { setDraft(''); setQ(''); setPage(1) }}>
+              Reset pencarian
             </button>
           )}
           <button
             type="button"
-            className="ws-refresh"
+            className="as-icon-btn"
+            title="Perbarui data"
             aria-label="Perbarui data"
             disabled={list.isFetching}
             onClick={() => void list.refetch()}
@@ -169,9 +166,10 @@ export function KelolaAset() {
             <RefreshCw size={16} />
           </button>
         </div>
-        {assessment === 'pending' && (
+
+        {showCheckbox && (
           <form
-            className="ws-register-tools"
+            className="as-bulk"
             aria-label="Penetapan massal aset belum dinilai"
             onSubmit={(event) => {
               event.preventDefault()
@@ -189,120 +187,131 @@ export function KelolaAset() {
             }}
           >
             <strong>{selectedIds.length} aset dipilih</strong>
-            <small>Pilih maksimal 100 aset berstatus belum dinilai. Pilihan dapat melintasi halaman.</small>
-            <label>
-              <span className="sr-only">Unit pemilik</span>
-              <select aria-label="Unit pemilik untuk penetapan massal" value={bulkUnit} onChange={(event) => setBulkUnit(event.target.value)}>
-                <option value="">Pilih unit pemilik</option>
-                {lookups.data.unit.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-              </select>
-            </label>
-            {bulkErrors.unit_pemilik_id?.[0] && <small role="alert">{bulkErrors.unit_pemilik_id[0]}</small>}
-            <label>
-              <span className="sr-only">Kategori aset</span>
-              <select aria-label="Kategori untuk penetapan massal" value={bulkCategory} onChange={(event) => setBulkCategory(event.target.value)}>
-                <option value="">Pilih kategori</option>
-                {allowedCategories.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-              </select>
-            </label>
-            {bulkErrors.kategori_id?.[0] && <small role="alert">{bulkErrors.kategori_id[0]}</small>}
+            <select aria-label="Unit pemilik untuk penetapan massal" value={bulkUnit} onChange={(event) => setBulkUnit(event.target.value)}>
+              <option value="">Pilih unit pemilik</option>
+              {lookups.data.unit.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+            </select>
+            <select aria-label="Kategori untuk penetapan massal" value={bulkCategory} onChange={(event) => setBulkCategory(event.target.value)}>
+              <option value="">Pilih kategori</option>
+              {allowedCategories.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+            </select>
             <button type="submit" className="primary" disabled={bulkAssign.isPending || !selectedIds.length}>
-              {bulkAssign.isPending ? 'Menetapkan...' : 'Tetapkan aset terpilih'}
+              {bulkAssign.isPending ? 'Menetapkan…' : 'Tetapkan aset terpilih'}
             </button>
-            {selectedIds.length > 0 && <button type="button" onClick={() => setSelectedIds([])} disabled={bulkAssign.isPending}>Batal pilih</button>}
+            {selectedIds.length > 0 && (
+              <button type="button" className="as-btn" onClick={() => setSelectedIds([])} disabled={bulkAssign.isPending}>
+                Batal pilih
+              </button>
+            )}
+            {(bulkErrors.unit_pemilik_id?.[0] || bulkErrors.kategori_id?.[0]) && (
+              <small role="alert" className="as-error">
+                {bulkErrors.unit_pemilik_id?.[0] ?? bulkErrors.kategori_id?.[0]}
+              </small>
+            )}
+            <small>Pilih maksimal 100 aset yang belum dinilai. Pilihan dapat melintasi halaman.</small>
           </form>
         )}
+
         {bulkResult && (
-          <div className="ws-panel" role="status" aria-live="polite">
+          <div className="as-banner" role="status" aria-live="polite">
             <strong>Hasil penetapan: {bulkResult.berhasil} berhasil, {bulkResult.gagal} gagal.</strong>
             {bulkResult.masalah.length > 0 && (
               <ul>{bulkResult.masalah.map((item) => <li key={item.id}>Aset #{item.id}: {item.pesan}</li>)}</ul>
             )}
           </div>
         )}
+
         {list.isPending ? (
-          <div className="ws-loading" role="status">
-            <span>Memuat data...</span>
-          </div>
+          <div className="as-state" role="status">Memuat data…</div>
         ) : list.isError ? (
-          <div className="ws-empty" role="alert">
+          <div className="as-state" role="alert">
             <strong>Data belum dapat dimuat</strong>
             <p>{errorMessage(list.error)}</p>
-            <button type="button" onClick={() => void list.refetch()}>
-              Coba lagi
-            </button>
+            <button type="button" className="as-btn" onClick={() => void list.refetch()}>Coba lagi</button>
           </div>
         ) : !list.data.data.length ? (
-          <div className="ws-empty">
-            <Search size={30} />
+          <div className="as-state">
+            <Search size={28} />
             <strong>Tidak ada aset yang ditemukan</strong>
             <p>Coba ubah kata kunci atau periksa kembali lingkup satker Anda.</p>
           </div>
         ) : (
           <>
-            <div className="ws-table-wrap">
-              <table className="ws-table">
+            <div className="as-table-wrap">
+              <table className="as-table">
                 <caption className="sr-only">Daftar aset satker</caption>
                 <thead>
                   <tr>
-                    <th>
-                      {assessment === 'pending' && <input
-                        type="checkbox"
-                        aria-label="Pilih semua aset belum dinilai di halaman ini"
-                        checked={pendingRows.length > 0 && pendingRows.every((row) => selectedIds.includes(row.id))}
-                        onChange={(event) => {
-                          const ids = pendingRows.map((row) => row.id)
-                          setSelectedIds((current) => {
-                            if (event.target.checked) {
-                              const combined = [...new Set([...current, ...ids])]
-                              if (combined.length > 100) toast.info('Maksimal 100 aset dapat dipilih sekaligus. Sebagian aset di halaman ini belum dipilih.')
-                              return combined.slice(0, 100)
-                            }
-                            return current.filter((id) => !ids.includes(id))
-                          })
-                        }}
-                      />}
-                    </th>
-                    <th>Kode aset</th>
-                    <th>Nama</th>
-                    <th>Sumber</th>
+                    {showCheckbox && (
+                      <th className="as-check">
+                        <input
+                          type="checkbox"
+                          aria-label="Pilih semua aset belum dinilai di halaman ini"
+                          checked={pendingRows.length > 0 && pendingRows.every((row) => selectedIds.includes(row.id))}
+                          onChange={(event) => {
+                            const ids = pendingRows.map((row) => row.id)
+                            setSelectedIds((current) => {
+                              if (event.target.checked) {
+                                const combined = [...new Set([...current, ...ids])]
+                                if (combined.length > 100) toast.info('Maksimal 100 aset dapat dipilih sekaligus. Sebagian aset di halaman ini belum dipilih.')
+                                return combined.slice(0, 100)
+                              }
+                              return current.filter((id) => !ids.includes(id))
+                            })
+                          }}
+                        />
+                      </th>
+                    )}
+                    <th>Aset</th>
                     <th>Unit pemilik</th>
                     <th>Kategori</th>
                     <th>Kondisi</th>
                     <th>Penilaian</th>
-                    <th>Aksi</th>
+                    <th><span className="sr-only">Aksi</span></th>
                   </tr>
                 </thead>
                 <tbody>
                   {list.data.data.map((row) => {
                     const needsReview = isAssetPendingAssessment(row)
+                    const unitLabel = labelOf(lookups.data.unit, row.unit_pemilik_id)
+                    const kategoriLabel = labelOf(lookups.data.kategori, row.kategori_id)
                     return (
                       <tr key={row.id}>
-                        <td>{needsReview && assessment === 'pending' && <input type="checkbox" aria-label={'Pilih aset ' + row.id} checked={selectedIds.includes(row.id)} onChange={(event) => toggleAsset(row.id, event.target.checked)} />}</td>
-                        <td>{str(row.kode_aset) || '-'}</td>
-                        <td>
-                          <button type="button" className="ws-cell-link" onClick={() => setSelected(row)}>
+                        {showCheckbox && (
+                          <td className="as-check">
+                            {needsReview && (
+                              <input
+                                type="checkbox"
+                                aria-label={'Pilih aset ' + row.id}
+                                checked={selectedIds.includes(row.id)}
+                                onChange={(event) => toggleAsset(row.id, event.target.checked)}
+                              />
+                            )}
+                          </td>
+                        )}
+                        <td data-label="Aset">
+                          <button type="button" className="as-cell-main" onClick={() => setSelected(row)}>
                             {str(row.nama) || '#' + row.id}
                           </button>
+                          <div className="as-sub">
+                            {str(row.kode_aset) || '-'} · {labelOf(lookups.data.sumber, row.sumber_id)}
+                          </div>
                         </td>
-                        <td>{labelOf(lookups.data.sumber, row.sumber_id)}</td>
-                        <td>{labelOf(lookups.data.unit, row.unit_pemilik_id)}</td>
-                        <td>{labelOf(lookups.data.kategori, row.kategori_id)}</td>
-                        <td>{str(row.kondisi) || '-'}</td>
-                        <td>
-                          <span className={'ws-badge ' + (needsReview ? 'danger' : 'success')}>
-                            <span />
-                            {needsReview ? 'BELUM DINILAI' : 'SUDAH DINILAI'}
-                          </span>
+                        <td data-label="Unit pemilik" title={unitLabel}>{namaSaja(unitLabel)}</td>
+                        <td data-label="Kategori" title={kategoriLabel}>{namaSaja(kategoriLabel)}</td>
+                        <td data-label="Kondisi"><KondisiPill value={row.kondisi} /></td>
+                        <td data-label="Penilaian">
+                          <Pill tone={needsReview ? 'warn' : 'ok'}>{needsReview ? 'Belum dinilai' : 'Sudah dinilai'}</Pill>
                         </td>
-                        <td>
+                        <td className="as-actions-cell">
                           <button
                             type="button"
-                            className="ws-row-open"
+                            className="as-icon-btn"
+                            title="Kelola aset"
                             aria-label={'Kelola aset ' + row.id}
                             onClick={() => setSelected(row)}
                           >
-                            <Edit3 size={17} />
+                            <Edit3 size={16} />
                           </button>
                         </td>
                       </tr>
@@ -311,30 +320,11 @@ export function KelolaAset() {
                 </tbody>
               </table>
             </div>
-            <div className="ws-pagination">
-              <span>
-                {list.data.meta.from || 0}-{list.data.meta.to || 0} dari {list.data.meta.total} data
-              </span>
-              <div>
-                <button type="button" aria-label="Halaman sebelumnya" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                  <ChevronLeft size={16} />
-                </button>
-                <span>
-                  Halaman {list.data.meta.current_page} / {list.data.meta.last_page}
-                </span>
-                <button
-                  type="button"
-                  aria-label="Halaman berikutnya"
-                  disabled={page >= list.data.meta.last_page}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
+            <Pager meta={list.data.meta} onPage={setPage} />
           </>
         )}
       </section>
+
       <Drawer
         open={!!selected}
         onClose={() => setSelected(null)}
@@ -351,45 +341,6 @@ export function KelolaAset() {
         )}
       </Drawer>
     </>
-  )
-}
-
-function Select({
-  id,
-  label,
-  value,
-  onChange,
-  options,
-  placeholder,
-  error,
-  disabled,
-}: {
-  id: string
-  label: string
-  value: string
-  onChange: (value: string) => void
-  options: Option[]
-  placeholder: string
-  error?: string
-  disabled?: boolean
-}) {
-  return (
-    <div className="ws-profile-field">
-      <label htmlFor={id}>{label}</label>
-      <select id={id} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
-        <option value="">{placeholder}</option>
-        {options.map((o) => (
-          <option key={o.id} value={String(o.id)}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      {error && (
-        <small role="alert" style={{ color: '#b91c2c' }}>
-          {error}
-        </small>
-      )}
-    </div>
   )
 }
 
@@ -437,12 +388,13 @@ function AsetEditor({ row, lookups, onSaved }: { row: Row; lookups: Lookups; onS
   }
 
   const first = (field: string) => errors[field]?.[0]
+  const needsReview = isAssetPendingAssessment(row)
   const details = Object.entries(row).filter(
     ([key]) => !['data_mentah', 'hash_data'].includes(key),
   )
   const detailValue = (key: string, value: unknown) => {
     if (key === 'perlu_ditinjau') {
-      return isAssetPendingAssessment({ perlu_ditinjau: value }) ? 'BELUM DINILAI' : 'SUDAH DINILAI'
+      return isAssetPendingAssessment({ perlu_ditinjau: value }) ? 'Belum dinilai' : 'Sudah dinilai'
     }
     if (key === 'unit_pemilik_id') return labelOf(lookups.unit, value)
     if (key === 'kategori_id') return labelOf(lookups.kategori, value)
@@ -452,57 +404,75 @@ function AsetEditor({ row, lookups, onSaved }: { row: Row; lookups: Lookups; onS
     if (typeof value === 'object') return JSON.stringify(value)
     return String(value)
   }
+  const facts: Array<[string, string]> = [
+    ['Kode aset', str(row.kode_aset) || '-'],
+    ['Sumber', labelOf(lookups.sumber, row.sumber_id)],
+    ['Merk', str(row.merk) || '-'],
+    ['Nomor seri', str(row.nomor_seri) || '-'],
+    ['Jumlah', str(row.jumlah) || '-'],
+    ['Tanggal pengadaan', str(row.tanggal_pengadaan).slice(0, 10) || '-'],
+  ]
 
   return (
-    <div className="ws-detail">
-      <details>
-        <summary>Seluruh data aset</summary>
-        <dl>
-          {details.map(([key, value]) => (
-            <div key={key}>
-              <dt>{key.replaceAll('_', ' ')}</dt>
-              <dd>{detailValue(key, value)}</dd>
+    <div className="as-stack">
+      <div className="as-summary">
+        <h2>{str(row.nama) || 'Aset #' + row.id}</h2>
+        <div className="as-pills">
+          <KondisiPill value={row.kondisi} />
+          <StatusPill value={row.status} />
+          <Pill tone={needsReview ? 'warn' : 'ok'}>{needsReview ? 'Belum dinilai' : 'Sudah dinilai'}</Pill>
+        </div>
+      </div>
+
+      <Section title="Informasi aset">
+        <dl className="as-facts">
+          {facts.map(([label, value]) => (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd>{value}</dd>
             </div>
           ))}
         </dl>
-      </details>
-      <dl>
-        <div>
-          <dt>Kode aset</dt>
-          <dd>{str(row.kode_aset) || '-'}</dd>
-        </div>
-        <div>
-          <dt>Nama</dt>
-          <dd>{str(row.nama) || '-'}</dd>
-        </div>
-        <div>
-          <dt>Kondisi</dt>
-          <dd>{str(row.kondisi) || '-'}</dd>
-        </div>
-      </dl>
-      <form className="ws-profile-form" onSubmit={submit} noValidate>
-        <h3>Data lokal aset</h3>
-        <div className="ws-profile-form-grid">
-          <Select id="aset-unit" label="Unit pemilik" value={form.unit} onChange={set('unit')} options={lookups.unit} placeholder="Pilih unit" error={first('unit_pemilik_id')} disabled={save.isPending} />
-          <Select id="aset-kategori" label="Kategori aset" value={form.kategori} onChange={set('kategori')} options={lookups.kategori} placeholder="Pilih kategori" error={first('kategori_id')} disabled={save.isPending} />
-          <Select id="aset-klasifikasi" label="Klasifikasi informasi" value={form.klasifikasi} onChange={set('klasifikasi')} options={lookups.klasifikasi} placeholder="Tanpa klasifikasi" error={first('klasifikasi_informasi_id')} disabled={save.isPending} />
-          <div className="ws-profile-field">
-            <label htmlFor="aset-lokasi">Lokasi</label>
-            <input id="aset-lokasi" type="text" maxLength={255} value={form.lokasi} disabled={save.isPending} onChange={(e) => set('lokasi')(e.target.value)} />
-            {first('lokasi') && <small role="alert" style={{ color: '#b91c2c' }}>{first('lokasi')}</small>}
+        <details className="as-details">
+          <summary>Lihat seluruh data</summary>
+          <dl>
+            {details.map(([key, value]) => (
+              <div key={key}>
+                <dt>{key.replaceAll('_', ' ')}</dt>
+                <dd>{detailValue(key, value)}</dd>
+              </div>
+            ))}
+          </dl>
+        </details>
+      </Section>
+
+      <Section title="Data lokal aset">
+        <form className="as-form" onSubmit={submit} noValidate>
+          <div className="as-grid">
+            <Field label="Unit pemilik" error={first('unit_pemilik_id')}>
+              <SelectBox value={form.unit} onChange={set('unit')} options={lookups.unit} placeholder="Pilih unit" disabled={save.isPending} />
+            </Field>
+            <Field label="Kategori aset" error={first('kategori_id')}>
+              <SelectBox value={form.kategori} onChange={set('kategori')} options={lookups.kategori} placeholder="Pilih kategori" disabled={save.isPending} />
+            </Field>
+            <Field label="Klasifikasi informasi" error={first('klasifikasi_informasi_id')}>
+              <SelectBox value={form.klasifikasi} onChange={set('klasifikasi')} options={lookups.klasifikasi} placeholder="Tanpa klasifikasi" disabled={save.isPending} />
+            </Field>
+            <Field label="Lokasi" error={first('lokasi')}>
+              <input type="text" maxLength={255} value={form.lokasi} disabled={save.isPending} onChange={(e) => set('lokasi')(e.target.value)} />
+            </Field>
+            <Field label="Deskripsi" wide error={first('deskripsi')}>
+              <textarea rows={3} maxLength={10000} value={form.deskripsi} disabled={save.isPending} onChange={(e) => set('deskripsi')(e.target.value)} />
+            </Field>
           </div>
-          <div className="ws-profile-field">
-            <label htmlFor="aset-deskripsi">Deskripsi</label>
-            <textarea id="aset-deskripsi" rows={3} maxLength={10000} value={form.deskripsi} disabled={save.isPending} onChange={(e) => set('deskripsi')(e.target.value)} />
-            {first('deskripsi') && <small role="alert" style={{ color: '#b91c2c' }}>{first('deskripsi')}</small>}
+          <div className="as-actions">
+            <button type="submit" className="primary" disabled={save.isPending}>
+              {save.isPending ? 'Menyimpan…' : 'Simpan perubahan'}
+            </button>
           </div>
-        </div>
-        <div className="ws-profile-actions">
-          <button type="submit" className="primary" disabled={save.isPending}>
-            {save.isPending ? 'Menyimpan…' : 'Simpan perubahan'}
-          </button>
-        </div>
-      </form>
+        </form>
+      </Section>
+
       <Penugasan asetId={row.id} pegawai={lookups.pegawai} />
     </div>
   )
@@ -525,7 +495,7 @@ function Penugasan({ asetId, pegawai }: { asetId: number; pegawai: Option[] }) {
   })
   const refresh = () => void client.invalidateQueries({ queryKey: ['satker', 'penugasan', asetId] })
 
-    const save = useMutation({
+  const save = useMutation({
     mutationFn: async (body: Record<string, unknown>) => {
       if (editing) await api.patch('/api/penugasan-aset/' + editing.id, body)
       else await api.post('/api/penugasan-aset', { aset_id: asetId, ...body })
@@ -576,79 +546,64 @@ function Penugasan({ asetId, pegawai }: { asetId: number; pegawai: Option[] }) {
   const first = (field: string) => errors[field]?.[0]
 
   return (
-    <>
-      <h3>Penanggung jawab aset</h3>
+    <Section title="Penanggung jawab aset">
       {list.isPending ? (
-        <p role="status">Memuat penugasan…</p>
+        <p className="as-empty-note" role="status">Memuat penugasan…</p>
       ) : list.isError ? (
-        <p role="alert">{errorMessage(list.error)}</p>
+        <p className="as-error" role="alert">{errorMessage(list.error)}</p>
       ) : !list.data.data.length ? (
-        <p>Belum ada penugasan untuk aset ini.</p>
+        <p className="as-empty-note">Belum ada penugasan untuk aset ini.</p>
       ) : (
-        <div className="ws-table-wrap">
-          <table className="ws-table">
-            <thead>
-              <tr>
-                <th>Pegawai</th>
-                <th>Tanggung jawab</th>
-                <th>Mulai</th>
-                <th>Selesai</th>
-                <th>Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.data.data.map((row) => (
-                <tr key={row.id}>
-                  <td>{labelOf(pegawai, row.pegawai_id)}</td>
-                  <td>{str(row.jenis_tanggung_jawab) || '-'}</td>
-                  <td>{dateOnly(row.mulai) || '-'}</td>
-                  <td>{dateOnly(row.selesai) || '-'}</td>
-                  <td>
-                    <button type="button" className="ws-row-open" aria-label={'Ubah penugasan ' + row.id} onClick={() => startEdit(row)}>
-                      <Edit3 size={16} />
-                    </button>
-                    <button type="button" className="ws-row-open" aria-label={'Hapus penugasan ' + row.id} onClick={() => setRemoving(row)}>
-                      <Trash2 size={16} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ul className="as-assign-list">
+          {list.data.data.map((row) => (
+            <li key={row.id}>
+              <div>
+                <strong>{labelOf(pegawai, row.pegawai_id)}</strong>
+                <div className="as-sub">
+                  {str(row.jenis_tanggung_jawab) || '-'} · {dateOnly(row.mulai) || '-'} s/d {dateOnly(row.selesai) || 'sekarang'}
+                </div>
+              </div>
+              <div>
+                <button type="button" className="as-icon-btn" title="Ubah" aria-label={'Ubah penugasan ' + row.id} onClick={() => startEdit(row)}>
+                  <Edit3 size={16} />
+                </button>
+                <button type="button" className="as-icon-btn is-danger" title="Hapus" aria-label={'Hapus penugasan ' + row.id} onClick={() => setRemoving(row)}>
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
-      <form className="ws-profile-form" onSubmit={submit} noValidate>
-        <h3>{editing ? 'Ubah penugasan #' + editing.id : 'Tambah penugasan'}</h3>
-        <div className="ws-profile-form-grid">
-          <Select id="tugas-pegawai" label="Pegawai" value={form.pegawai} onChange={(v) => setForm((f) => ({ ...f, pegawai: v }))} options={pegawai} placeholder="Pilih pegawai" error={first('pegawai_id')} disabled={save.isPending} />
-          <div className="ws-profile-field">
-            <label htmlFor="tugas-jenis">Jenis tanggung jawab</label>
-            <input id="tugas-jenis" type="text" maxLength={255} value={form.jenis} disabled={save.isPending} onChange={(e) => setForm((f) => ({ ...f, jenis: e.target.value }))} placeholder="Contoh: Penanggung jawab" />
-            {first('jenis_tanggung_jawab') && <small role="alert" style={{ color: '#b91c2c' }}>{first('jenis_tanggung_jawab')}</small>}
-          </div>
-          <div className="ws-profile-field">
-            <label htmlFor="tugas-mulai">Mulai</label>
-            <input id="tugas-mulai" type="date" value={form.mulai} disabled={save.isPending} onChange={(e) => setForm((f) => ({ ...f, mulai: e.target.value }))} />
-            {first('mulai') && <small role="alert" style={{ color: '#b91c2c' }}>{first('mulai')}</small>}
-          </div>
-          <div className="ws-profile-field">
-            <label htmlFor="tugas-selesai">Selesai (opsional)</label>
-            <input id="tugas-selesai" type="date" value={form.selesai} disabled={save.isPending} onChange={(e) => setForm((f) => ({ ...f, selesai: e.target.value }))} />
-            {first('selesai') && <small role="alert" style={{ color: '#b91c2c' }}>{first('selesai')}</small>}
-          </div>
+
+      <form className="as-form" onSubmit={submit} noValidate>
+        <div className="as-grid">
+          <Field label="Pegawai" required wide error={first('pegawai_id')}>
+            <SelectBox value={form.pegawai} onChange={(v) => setForm((f) => ({ ...f, pegawai: v }))} options={pegawai} placeholder="Pilih pegawai" disabled={save.isPending} />
+          </Field>
+          <Field label="Jenis tanggung jawab" required wide error={first('jenis_tanggung_jawab')}>
+            <input type="text" maxLength={255} value={form.jenis} disabled={save.isPending} onChange={(e) => setForm((f) => ({ ...f, jenis: e.target.value }))} placeholder="Contoh: Penanggung jawab" />
+          </Field>
+          <Field label="Mulai" required error={first('mulai')}>
+            <input type="date" value={form.mulai} disabled={save.isPending} onChange={(e) => setForm((f) => ({ ...f, mulai: e.target.value }))} />
+          </Field>
+          <Field label="Selesai" hint="Opsional." error={first('selesai')}>
+            <input type="date" value={form.selesai} disabled={save.isPending} onChange={(e) => setForm((f) => ({ ...f, selesai: e.target.value }))} />
+          </Field>
         </div>
-        <div className="ws-profile-actions">
+        <div className="as-actions">
           <button type="submit" className="primary" disabled={save.isPending}>
-            <Plus size={16} />
+            {!editing && <Plus size={16} />}
             {save.isPending ? 'Menyimpan…' : editing ? 'Simpan penugasan' : 'Tambah penugasan'}
           </button>
           {editing && (
-            <button type="button" disabled={save.isPending} onClick={cancel}>
-              Batal
+            <button type="button" className="as-btn" disabled={save.isPending} onClick={cancel}>
+              Batal ubah
             </button>
           )}
         </div>
       </form>
+
       <ConfirmDialog
         open={!!removing}
         onClose={() => setRemoving(null)}
@@ -671,6 +626,6 @@ function Penugasan({ asetId, pegawai }: { asetId: number; pegawai: Option[] }) {
           }
         }}
       />
-    </>
+    </Section>
   )
 }

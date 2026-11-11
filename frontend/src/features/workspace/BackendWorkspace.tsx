@@ -25,9 +25,11 @@ import {
   AlertTriangle,
   UserCheck,
   Edit3,
+  Plus,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { KelolaPage } from '../satker/KelolaPage'
+import KategoriAsetPage from '../aset/KategoriAsetPage'
 import { KelolaUnit } from '../satker/KelolaUnit'
 import { KelolaPegawai } from '../satker/KelolaPegawai'
 import { KelolaPengguna } from '../satker/KelolaPengguna'
@@ -145,6 +147,7 @@ export function BackendWorkspace() {
       !(isSatkerAdmin && ['Referensi', 'Organisasi'].includes(m.group)) &&
       !(isSatkerAdmin && m.path === '/kepatuhan') &&
       !(isStaffOnly && m.path === '/monitoring') &&
+      !(isKasubOnly && m.path === '/aset') &&
       !(isKasubOnly && m.path === '/pegawai') &&
       (!m.admin || roleCodes.includes('SUPER_ADMIN')) &&
       (!m.roles || m.roles.some((r) => roleCodes.includes(r))),
@@ -331,6 +334,8 @@ export function BackendWorkspace() {
             <KelolaPengguna superAdmin />
           ) : active.path === '/approval-akun' ? (
             <ApprovalPage />
+          ) : active.path === '/kategori-aset' ? (
+            <KategoriAsetPage />
           ) : active.path === '/review-asesmen' ? (
             <ReviewAsesmenPage />
           ) : active.path === '/buat-asesmen' ? (
@@ -649,7 +654,10 @@ function Profile({ session }: { session: ReturnType<typeof useSession>['data'] }
 }
 function AsetMonitor() {
   const [params, setParams] = useSearchParams()
+  const session = useSession()
   const activeTab = params.get('tab') || 'aset'
+  const roleCodes = session.data?.roleCodes ?? []
+  const canAddInventory = roleCodes.includes('KASUB') && !roleCodes.some((role) => ['ADMIN_SATKER', 'SUPER_ADMIN'].includes(role))
 
   const total = useQuery({
     queryKey: ['workspace', 'count', '/api/aset', 'all'],
@@ -674,6 +682,14 @@ function AsetMonitor() {
   }
 
   return (
+    <>
+    {canAddInventory && (
+      <div className="ws-register-tools">
+        <Link to="/kelola/aset" className="primary">
+          <Plus size={16} /> Tambah inventaris aset
+        </Link>
+      </div>
+    )}
     <section className="ws-metrics" aria-label="Pemantauan penilaian aset">
       <button
         type="button"
@@ -744,6 +760,7 @@ function AsetMonitor() {
         </small>
       </button>
     </section>
+    </>
   )
 }
 function Overview() {

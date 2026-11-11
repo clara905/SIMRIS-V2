@@ -153,6 +153,8 @@ class SimrisSeeder extends Seeder
                 ]
             );
 
+            $this->seedAssetCatalogs();
+
             /*
             |--------------------------------------------------------------------------
             | 5. SEED DATA DEMO KHUSUS LOCAL
@@ -163,6 +165,92 @@ class SimrisSeeder extends Seeder
                 $this->seedLocal($roles, $sumber, $kategori);
             }
         });
+    }
+
+    private function seedAssetCatalogs(): void
+    {
+        $categories = [
+            'PERANGKAT_KERAS' => [
+                'nama' => 'Perangkat Keras',
+                'children' => [
+                    'SERVER' => 'Server',
+                    'KOMPUTER_LAPTOP' => 'Komputer & Laptop',
+                    'PERANGKAT_JARINGAN' => 'Perangkat Jaringan',
+                    'PERANGKAT_PENYIMPANAN' => 'Perangkat Penyimpanan',
+                    'PERANGKAT_PERIFERAL' => 'Perangkat Periferal',
+                ],
+            ],
+            'PERANGKAT_LUNAK' => [
+                'nama' => 'Perangkat Lunak',
+                'children' => [
+                    'SISTEM_OPERASI' => 'Sistem Operasi',
+                    'APLIKASI' => 'Aplikasi',
+                    'BASIS_DATA' => 'Basis Data',
+                ],
+            ],
+            'INFORMASI_DATA' => [
+                'nama' => 'Informasi & Data',
+                'children' => [
+                    'DOKUMEN_DIGITAL' => 'Dokumen Digital',
+                    'DOKUMEN_FISIK' => 'Dokumen Fisik',
+                    'BASIS_DATA_OPERASIONAL' => 'Basis Data Operasional',
+                ],
+            ],
+            'LAYANAN' => [
+                'nama' => 'Layanan',
+                'children' => [
+                    'LAYANAN_JARINGAN' => 'Layanan Jaringan',
+                    'LAYANAN_APLIKASI' => 'Layanan Aplikasi',
+                ],
+            ],
+            'SUMBER_DAYA_MANUSIA' => [
+                'nama' => 'Sumber Daya Manusia',
+                'children' => [],
+            ],
+            'FASILITAS' => [
+                'nama' => 'Fasilitas',
+                'children' => [
+                    'RUANG_SERVER' => 'Ruang Server',
+                    'PERANGKAT_PENDUKUNG_FISIK' => 'Perangkat Pendukung Fisik',
+                ],
+            ],
+        ];
+
+        foreach ($categories as $kode => $category) {
+            $parentId = $this->record(
+                'KATEGORI_ASET',
+                ['kode' => $kode],
+                ['parent_id' => null, 'nama' => $category['nama']]
+            );
+            foreach ($category['children'] as $childCode => $childName) {
+                $this->record(
+                    'KATEGORI_ASET',
+                    ['kode' => $childCode],
+                    ['parent_id' => $parentId, 'nama' => $childName]
+                );
+            }
+        }
+
+        foreach ([
+            'PUBLIK' => [
+                'nama' => 'Publik',
+                'deskripsi' => 'Informasi yang boleh diketahui siapa saja dan tidak berdampak bila tersebar.',
+            ],
+            'INTERNAL' => [
+                'nama' => 'Internal',
+                'deskripsi' => 'Informasi untuk lingkungan organisasi; penyebaran ke luar dapat mengganggu operasional ringan.',
+            ],
+            'RAHASIA' => [
+                'nama' => 'Rahasia',
+                'deskripsi' => 'Informasi untuk pihak tertentu; kebocoran berdampak serius pada organisasi atau pihak terkait.',
+            ],
+            'SANGAT_RAHASIA' => [
+                'nama' => 'Sangat rahasia',
+                'deskripsi' => 'Informasi paling sensitif; kebocoran berdampak sangat berat dan sulit dipulihkan.',
+            ],
+        ] as $kode => $classification) {
+            $this->record('KLASIFIKASI_INFORMASI', ['kode' => $kode], $classification);
+        }
     }
 
     /**

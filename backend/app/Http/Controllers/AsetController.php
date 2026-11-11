@@ -32,6 +32,11 @@ class AsetController extends Controller
         return AsetResource::collection($this->service->listing($request->user(), $request->validated(), $request->route('resource') === 'penugasan-aset'));
     }
 
+    public function options(AsetRequest $request): JsonResponse
+    {
+        return response()->json(['data' => $this->service->options($request->user())]);
+    }
+
     #[Response(status: 401, description: 'Autentikasi diperlukan.', type: 'array{message: string}')]
     #[Response(status: 403, description: 'Hak akses tidak memenuhi syarat.', type: 'array{message: string, code?: string}')]
     #[Response(status: 404, description: 'Data tidak ada atau di luar scope.', type: 'array{message: string}')]
@@ -62,7 +67,11 @@ class AsetController extends Controller
     #[Response(status: 422, description: 'Validasi input gagal.', type: 'array{message: string, errors: array<string, list<string>>}')]
     public function store(AsetRequest $request): JsonResponse
     {
-        return (new AsetResource($this->service->assignment(null, $request->validated(), $request->user())))->response()->setStatusCode(201);
+        $model = $request->route('resource') === 'penugasan-aset'
+            ? $this->service->assignment(null, $request->validated(), $request->user())
+            : $this->service->create($request->validated(), $request->user());
+
+        return (new AsetResource($model))->response()->setStatusCode(201);
     }
 
     #[Response(status: 401, description: 'Autentikasi diperlukan.', type: 'array{message: string}')]
@@ -71,9 +80,13 @@ class AsetController extends Controller
     #[Response(status: 422, description: 'Validasi input gagal.', type: 'array{message: string, errors: array<string, list<string>>}')]
     public function destroy(AsetRequest $request): JsonResponse
     {
-        $this->service->assignment((int) $request->route('id'), [], $request->user(), true);
+        if ($request->route('resource') === 'penugasan-aset') {
+            $this->service->assignment((int) $request->route('id'), [], $request->user(), true);
+        } else {
+            $this->service->delete((int) $request->route('id'), $request->user());
+        }
 
-        return response()->json(['message' => 'Penugasan aset dihapus.']);
+        return response()->json(['message' => $request->route('resource') === 'penugasan-aset' ? 'Penugasan aset dihapus.' : 'Inventaris aset dihapus.']);
     }
 
     #[Response(status: 401, description: 'Autentikasi diperlukan.', type: 'array{message: string}')]

@@ -17,7 +17,16 @@ class AsetPolicy
 
     public function write(User $user, int $unit): Response
     {
-        return in_array($unit, $this->scope->idsForRoles($user, ['ADMIN_SATKER']), true) ? Response::allow() : Response::deny('Hanya ADMIN_SATKER dalam scope aset dapat mengubah data lokal.');
+        return in_array($unit, $this->scope->idsForRoles($user, ['ADMIN_SATKER', 'KASUB']), true)
+            ? Response::allow()
+            : Response::deny('Unit aset berada di luar lingkup pengelolaan Anda.');
+    }
+
+    public function create(User $user): Response
+    {
+        return $this->scope->hasRole($user, ['KASUB'])
+            ? Response::allow()
+            : Response::deny('Hanya KASUB dapat menambahkan inventaris aset lokal.');
     }
 
     public function sync(User $user): Response

@@ -179,6 +179,11 @@ class AppServiceProvider extends ServiceProvider
         );
 
         Gate::define(
+            'aset.create',
+            [AsetPolicy::class, 'create']
+        );
+
+        Gate::define(
             'aset.sync',
             [AsetPolicy::class, 'sync']
         );

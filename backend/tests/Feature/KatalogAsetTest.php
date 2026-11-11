@@ -147,6 +147,91 @@ test('asset scope applies before validation and blocks unrelated role escalation
     grantRole($user, 'STAFF', $other->id);
     $this->patchJson('/api/aset/'.$foreign->id, ['lokasi' => 'Lab'])->assertNotFound();
 });
+test('Kasub can create, list, update, and delete local assets in the assigned unit tree', function (): void {
+    $unit = UnitOrganisasi::factory()->create();
+    $child = UnitOrganisasi::factory()->create(['parent_id' => $unit->id, 'jenis' => 'SUBBIDANG']);
+    $outside = UnitOrganisasi::factory()->create();
+    $category = KategoriAset::factory()->create();
+    $otherCategory = KategoriAset::factory()->create();
+    $user = katalogActor('KASUB', $unit);
+
+    $this->actingAs($user)->getJson('/api/aset/pilihan')->assertOk()
+        ->assertJsonFragment(['id' => $child->id, 'nama' => $child->nama])
+        ->assertJsonMissing(['id' => $outside->id, 'nama' => $outside->nama]);
+
+    $id = $this->postJson('/api/aset', [
+        'unit_pemilik_id' => $child->id,
+        'kategori_id' => $category->id,
+        'nama' => 'Laptop Kasub',
+        'deskripsi' => '',
+        'jumlah' => 0,
+        'kondisi' => 'BAIK',
+        'lokasi' => 'Ruang kerja',
+        'status' => 'AKTIF',
+    ])->assertCreated()
+        ->assertJsonPath('data.nama', 'Laptop Kasub')
+        ->assertJsonPath('data.deskripsi', '')
+        ->assertJsonPath('data.jumlah', 0)
+        ->assertJsonPath('data.unit_pemilik_id', $child->id)
+        ->json('data.id');
+
+    $asset = Aset::findOrFail($id);
+    expect($asset->kode_aset)->toBe((string) $asset->id);
+    expect($asset->kode_aset)->toMatch('/^[0-9]+$/');
+    expect($asset->merk)->toBeNull();
+    expect($asset->tanggal_pengadaan)->toBeNull();
+    expect(SumberAset::findOrFail($asset->sumber_id)->kode)->toBe(App\Services\AsetService::MANUAL_SOURCE_CODE);
+
+    $defaultQuantityId = $this->postJson('/api/aset', [
+        'unit_pemilik_id' => $unit->id,
+        'kategori_id' => $category->id,
+        'nama' => 'Aset jumlah bawaan',
+        'deskripsi' => '',
+        'kondisi' => 'BAIK',
+        'lokasi' => 'Ruang kerja',
+        'status' => 'AKTIF',
+    ])->assertCreated()->assertJsonPath('data.jumlah', 1)->json('data.id');
+    $this->deleteJson('/api/aset/'.$defaultQuantityId)->assertOk();
+
+    $this->getJson('/api/aset?filter[sumber]=lokal')->assertOk()->assertJsonPath('meta.total', 1);
+    $this->patchJson('/api/aset/'.$id, [
+        'kode_aset' => 'KASUB-ASET-1',
+        'unit_pemilik_id' => $unit->id,
+        'kategori_id' => $otherCategory->id,
+        'nama' => 'Laptop Kasub Baru',
+        'merk' => 'Contoh',
+        'nomor_seri' => 'SN-1',
+        'jumlah' => 2,
+        'kondisi' => 'RUSAK_BIASA',
+        'lokasi' => 'Gudang',
+        'tanggal_pengadaan' => '2025-01-02',
+        'status' => 'NONAKTIF',
+    ])->assertOk()->assertJsonPath('data.kode_aset', 'KASUB-ASET-1')->assertJsonPath('data.status', 'NONAKTIF');
+    expect($asset->fresh()->unit_pemilik_id)->toBe($unit->id);
+
+    $this->deleteJson('/api/aset/'.$id)->assertOk();
+    $this->assertDatabaseMissing('ASET', ['id' => $id]);
+});
+test('Kasub cannot change synced assets or create assets outside their scope', function (): void {
+    $unit = UnitOrganisasi::factory()->create();
+    $outside = UnitOrganisasi::factory()->create();
+    $category = KategoriAset::factory()->create();
+    $user = katalogActor('KASUB', $unit);
+    $synced = Aset::factory()->create(['unit_pemilik_id' => $unit->id]);
+
+    $this->actingAs($user)->patchJson('/api/aset/'.$synced->id, ['lokasi' => 'Lab'])->assertForbidden();
+    $this->deleteJson('/api/aset/'.$synced->id)->assertForbidden();
+    $this->postJson('/api/aset', [
+        'unit_pemilik_id' => $outside->id,
+        'kategori_id' => $category->id,
+        'nama' => 'Aset di luar scope',
+        'deskripsi' => '',
+        'kondisi' => 'BAIK',
+        'lokasi' => 'Gudang',
+        'status' => 'AKTIF',
+    ])->assertUnprocessable()->assertJsonValidationErrors('unit_pemilik_id');
+    $this->assertDatabaseCount('ASET', 1);
+});
 test('admin satker asset listing includes every child bidang and separates assessment state', function (): void {
     $unit = UnitOrganisasi::factory()->create();
     $bidang = UnitOrganisasi::factory()->create(['parent_id' => $unit->id]);

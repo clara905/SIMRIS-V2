@@ -94,6 +94,26 @@ test('base seeding is repeatable without exposing or resetting the initial passw
     $this->assertDatabaseCount('USER_ROLE_SCOPE', 1);
     $this->assertDatabaseCount('UNIT_ORGANISASI', 0);
     $this->assertDatabaseCount('ASET', 0);
+    $this->assertDatabaseCount('KATEGORI_ASET', 22);
+    $this->assertDatabaseCount('KLASIFIKASI_INFORMASI', 4);
+    $hardwareId = DB::table('KATEGORI_ASET')->where('kode', 'PERANGKAT_KERAS')->value('id');
+    $this->assertDatabaseHas('KATEGORI_ASET', [
+        'kode' => 'SERVER',
+        'nama' => 'Server',
+        'parent_id' => $hardwareId,
+    ]);
+    $this->assertDatabaseHas('KLASIFIKASI_INFORMASI', [
+        'kode' => 'PUBLIK',
+        'nama' => 'Publik',
+        'deskripsi' => 'Informasi yang boleh diketahui siapa saja dan tidak berdampak bila tersebar.',
+    ]);
+    $this->actingAs($user)->getJson('/api/aset/pilihan')
+        ->assertOk()
+        ->assertJsonPath('data.categories.0.kode', 'APLIKASI');
+    $this->getJson('/api/klasifikasi-informasi?per_page=100')
+        ->assertOk()
+        ->assertJsonPath('meta.total', 4)
+        ->assertJsonFragment(['kode' => 'SANGAT_RAHASIA', 'nama' => 'Sangat rahasia']);
     $this->assertDatabaseHas('USER_ROLE_SCOPE', ['user_id' => $user->id, 'unit_id' => null]);
     expect(Hash::check('Changed-test-password', $user->refresh()->password_hash))->toBeTrue();
     expect($user->wajib_ganti_password)->toBeFalse();
