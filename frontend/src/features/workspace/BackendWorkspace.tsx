@@ -35,6 +35,7 @@ import { KelolaPegawai } from '../satker/KelolaPegawai'
 import { KelolaPengguna } from '../satker/KelolaPengguna'
 import { ApprovalPage } from '../approval/ApprovalPage'
 import { SatkerBeranda } from '../satker/SatkerBeranda'
+import { StaffDashboard } from '../penyusunan/StaffDashboard'
 import { useSatkerUnit } from '../satker/api'
 import { isAssetPendingAssessment } from '../aset/assessment'
 import { api, errorMessage } from '../../api/client'
@@ -323,7 +324,7 @@ export function BackendWorkspace() {
               <Link to="/">Kembali ke ringkasan</Link>
             </section>
           ) : active.path === '/' ? (
-            isSatkerAdmin ? <SatkerBeranda /> : <Overview />
+            isSatkerAdmin ? <SatkerBeranda /> : isStaffOnly ? <StaffDashboard /> : <Overview />
           ) : active.path.startsWith('/kelola/') ? (
             <KelolaPage item={active} />
           ) : active.path === '/unit' && roleCodes.includes('SUPER_ADMIN') ? (

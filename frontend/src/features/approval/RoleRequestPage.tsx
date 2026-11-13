@@ -62,7 +62,11 @@ export function RoleRequestPage() {
     setSending(true)
     setError('')
     try {
-      await api.post('/api/v1/pengajuan-role', { role_kode: role, unit_id: Number(unitId), informasi_pendukung: information })
+      await api.post('/api/v1/pengajuan-role', {
+        role_kode: role,
+        ...(role === 'STAFF' ? {} : { unit_id: Number(unitId) }),
+        informasi_pendukung: information,
+      })
       setInformation('')
       await client.invalidateQueries({ queryKey: ['pengajuan-role'] })
     } catch (reason) {

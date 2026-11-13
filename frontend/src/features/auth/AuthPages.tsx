@@ -418,7 +418,7 @@ export function RegisterPage() {
                 toast.success('Tautan verifikasi dikirim. Buka email, lalu kembali ke halaman ini.')
                 return
               }
-              const data = await registerWithFirebase({ nip: values.nip, nama_lengkap: values.nama_lengkap, email: values.email, password: values.password, id_token: firebaseToken.current, captcha_token: captchaToken.current })
+              const data = await registerWithFirebase({ nip: values.nip, nama_lengkap: values.nama_lengkap, email: values.email, password: values.password, password_confirmation: values.password_confirmation, id_token: firebaseToken.current, captcha_token: captchaToken.current })
               toast.success(data.message)
               navigate('/masuk', { replace: true })
             } catch (err) {
@@ -485,7 +485,7 @@ export function RegisterPage() {
               id="reg-password"
               type={showPassword ? 'text' : 'password'}
               autoComplete="new-password"
-              placeholder="Minimal 8 karakter"
+              placeholder="Minimal 12 karakter"
               {...reg('password')}
               aria-invalid={!!errors.password}
               aria-describedby="reg-password-error"

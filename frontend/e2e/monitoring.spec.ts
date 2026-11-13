@@ -5,7 +5,8 @@ test.beforeEach(async ({ page }) => {
 })
 test('monitoring hanya-lihat pada semua jenis dan detail asesmen', async ({ page }) => {
   await page.goto('/monitoring')
-  for (const tab of ['Asesmen', 'SOA', 'SOP', 'Dokumen', 'Lampiran']) {
+  await expect(page.getByRole('tab', { name: 'SOA', exact: true })).toHaveCount(0)
+  for (const tab of ['Asesmen', 'SOP', 'Dokumen', 'Lampiran']) {
     await page.getByRole('tab', { name: tab, exact: true }).click()
     await expect(
       page.getByText('Hanya lihat. Super admin tidak mengubah data transaksi.', { exact: true }),

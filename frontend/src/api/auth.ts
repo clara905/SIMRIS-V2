@@ -88,6 +88,7 @@ export async function registerWithFirebase(values: {
   nama_lengkap: string
   email: string
   password: string
+  password_confirmation: string
   id_token: string
   captcha_token: string
 }) {

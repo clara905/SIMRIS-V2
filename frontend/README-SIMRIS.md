@@ -33,8 +33,8 @@ Build produksi tidak mengaktifkan mock kecuali variabelnya diatur eksplisit.
 - Sesi `/api/me` dinormalisasi dari `user`, `pegawai`, dan `roles`. Keenam role backend dapat masuk; menu pengguna dan audit hanya untuk SUPER_ADMIN. Backend tetap menentukan hak akses setiap data.
 - Login mengirim `login`, `password`, serta TOTP opsional. Ganti kata sandi memakai `/api/ganti-password` dan menyertakan `current_password`.
 - Ringkasan memakai `meta.total` dari API sesuai lingkup pengguna. Register memakai paginasi server dan filter ID/status; angka kosong tidak diganti data contoh.
-- Tersedia register asesmen, aset, SOP/SOA, kontrol internal, dokumen/lampiran, metode, katalog, standar/regulasi, periode, organisasi, pegawai, pengguna, dan audit.
-- Rincian asesmen memuat risiko, rencana penanganan, serta data Lampiran 14. Dokumen/SOP/SOA dapat dibuka riwayat versinya. Lampiran AMAN dapat diunduh dan audit dapat diekspor CSV.
+- Tersedia register asesmen, aset, SOP, kontrol internal, dokumen/lampiran, metode, katalog, standar/regulasi, periode, organisasi, pegawai, pengguna, dan audit. SOA tidak ditampilkan di frontend.
+- Rincian asesmen memuat risiko, rencana penanganan, serta data Lampiran 14. Dokumen dan SOP dapat dibuka riwayat versinya. Lampiran AMAN dapat diunduh dan audit dapat diekspor CSV.
 - Ruang kerja baru adalah antarmuka pemantauan. Form CRUD domain, penilaian, dan aksi persetujuan belum dihubungkan di UI baru. Form administrasi lama tetap berada di mode demonstrasi.
 - Ekspor dokumen Lampiran 14 masih menunggu template risiko yang sesuai; template pengaduan aset tidak dipaksakan ke skema risiko.
 
